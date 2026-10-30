@@ -36,8 +36,8 @@ async function analyze(file) {
 }
 
 function render(r) {
-  $("card").innerHTML = r.card ? renderCard(r.card) : '<p class="note">Analiz yapılamadı.</p>';
-  $("otari").innerHTML = renderCalls(r.calls || [], r.cost_usd);
+  $("card").innerHTML = r.card ? renderCard(r.card, r.calendar || []) : '<p class="note">Analiz yapılamadı.</p>';
+  $("otari").innerHTML = renderCalls(r.calls || [], r.cost_usd) + renderMcp(r.mcp);
   const pii = Object.entries(r.pii || {});
   $("pii").innerHTML = pii.length
     ? pii.map(([k, n]) => `<span class="chip">${esc(PII_LABELS[k] || k)} × ${n} maskelendi</span>`).join("")
@@ -67,12 +67,19 @@ function daysLeft(iso) {
   return `<span class="left ${n <= 7 ? "soon" : ""}">${n} gün kaldı</span>`;
 }
 
-function renderCard(c) {
+function renderCard(c, calendar) {
+  const used = new Set();
+  const calFor = (a) => {
+    const i = calendar.findIndex((e, j) => !used.has(j) && e.date === a.deadline);
+    if (i < 0) return "";
+    used.add(i);
+    return `<a class="cal" href="${esc(calendar[i].url)}" download>📅 Takvime ekle</a>`;
+  };
   const actions = (c.actions || []).map((a) => `
     <li class="action">
       <div class="action-head">
         <strong>${esc(a.title)}</strong>
-        <span class="deadline">${a.deadline ? "Son gün: " + esc(fmtDate(a.deadline)) : ""} ${daysLeft(a.deadline)}</span>
+        <span class="deadline">${a.deadline ? "Son gün: " + esc(fmtDate(a.deadline)) : ""} ${daysLeft(a.deadline)} ${calFor(a)}</span>
       </div>
       <p>${esc(a.detail)}</p>
       <p class="meta">${a.days ? esc(a.days) + " gün · " : ""}${esc(a.legal_basis || "")}</p>
@@ -117,6 +124,24 @@ function renderCalls(calls, total) {
   `).join("");
   return `<table class="calls"><thead><tr><th>Rol</th><th>Model</th><th>Sağlayıcı</th><th>Süre</th><th>Maliyet</th></tr></thead>
     <tbody>${rows}</tbody><tfoot><tr><td colspan="4">Toplam</td><td>$${Number(total || 0).toFixed(4)}</td></tr></tfoot></table>`;
+}
+
+const MCP_LABELS = {
+  resmi_tatiller: "Resmi tatiller", is_gunu_mu: "İş günü mü?", takvim_etkinligi_olustur: "Takvim etkinliği",
+};
+
+function renderMcp(m) {
+  if (!m || !m.connected) return '<p class="note">MCP sunucusu bağlı değil (tunnel kapalı).</p>';
+  const rows = (m.calls || []).map((c) => {
+    const args = Object.entries(c.args || {}).map(([k, v]) => `${esc(k)}=${esc(String(v).slice(0, 60))}`).join(", ");
+    const res = typeof c.result === "string" ? c.result
+      : c.result && c.result.sonraki_is_gunu ? `${c.result.gun}, iş günü: ${c.result.is_gunu ? "evet" : "hayır → " + c.result.sonraki_is_gunu}`
+      : c.result && c.result.ics_id ? `.ics oluşturuldu (${c.result.tarih})` : "";
+    return `<tr><td>${esc(MCP_LABELS[c.tool] || c.tool)}</td><td><code>${args}</code></td><td>${esc(res)}</td></tr>`;
+  }).join("");
+  return `<h3>MCP: sade-takvim sunucumuz (Otari çağırdı)</h3>
+    <table class="calls"><thead><tr><th>Araç</th><th>Model gönderdi</th><th>Sonuç</th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="3">Bu analizde MCP aracı çağrılmadı.</td></tr>'}</tbody></table>`;
 }
 
 async function loadSamples() {

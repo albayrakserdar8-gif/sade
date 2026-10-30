@@ -13,7 +13,7 @@ from __future__ import annotations
 import uuid
 from datetime import date
 
-from . import config, dates, otari, privacy, prompts
+from . import config, dates, mcp_takvim, otari, privacy, prompts
 
 
 def new_run_id() -> str:
@@ -77,10 +77,25 @@ async def analyze(
             for year in (today.year, today.year + 1)
             for d, name in dates.holidays_in(year) if d >= today
         )
+        callback = config.callback_base()
+        mcp_servers = []
+        if callback:
+            # Our own MCP server, reached by Otari through the tunnel. The run id
+            # in the URL lets us show this run's MCP calls in the UI.
+            mcp_servers.append({
+                "name": "sade-takvim",
+                "url": f"{callback}/mcp?run={run_id}",
+                "purpose_hint": "Türkiye resmi tatilleri, iş günü kontrolü ve son tarihler için takvim etkinliği (.ics) oluşturma.",
+                "allowed_tools": mcp_takvim.TOOL_NAMES,
+            })
+            holidays = "sade-takvim aracındaki resmi_tatiller ile al (gerekli her yıl için)."
         instructions = prompts.ANALYST.format(today=today.isoformat(), holidays=holidays)
+        if mcp_servers:
+            instructions += prompts.ANALYST_MCP
         hint = prompts.TYPE_HINTS.get(doc_class["doc_type"])
         if hint:
-            instructions += f"\nBelge türü ön sınıflandırması: {doc_class['doc_type']}. Hatırlatma: {hint}\n"
+            label = prompts.DOC_TYPES[doc_class["doc_type"]]
+            instructions += f"\nBelge türü ön sınıflandırması: {label}. Hatırlatma: {hint}\n"
 
         data, call = await otari.responses(
             role="analyze",
@@ -97,7 +112,7 @@ async def analyze(
             ],
             headers={"Otari-Code-Execution": "otari"},
             # Every tool call is billed, so keep the tool loop short.
-            extra={"max_tool_iterations": 5},
+            extra={"max_tool_iterations": 7, **({"mcp_servers": mcp_servers} if mcp_servers else {})},
             conversation_id=run_id,
             metadata={"doc_type": doc_class["doc_type"]},
         )
@@ -112,6 +127,18 @@ async def analyze(
         e.calls = [c.to_dict() for c in calls]  # type: ignore[attr-defined]
         raise
 
+    mcp_calls = mcp_takvim.CALL_LOG.pop(run_id, [])
+    calendar = []
+    for c in mcp_calls:
+        if c["tool"] == "takvim_etkinligi_olustur" and isinstance(c["result"], dict):
+            ics_id = c["result"]["ics_id"]
+            mcp_takvim.personalize(ics_id, lambda t: privacy.unmask(t, masked.mapping))
+            calendar.append({
+                "title": privacy.unmask(c["result"]["baslik"], masked.mapping),
+                "date": c["result"]["tarih"],
+                "url": f"/ics/{ics_id}.ics",
+            })
+
     return {
         "run_id": run_id,
         "source": "image" if image_uri else "text",
@@ -123,5 +150,7 @@ async def analyze(
         # for display, here on their side.
         "card": privacy.unmask_deep(card, masked.mapping),
         "calls": [c.to_dict() for c in calls],
+        "mcp": {"connected": bool(mcp_servers), "calls": mcp_calls},
+        "calendar": calendar,
         "cost_usd": round(sum(c.cost_usd for c in calls), 6),
     }

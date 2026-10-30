@@ -20,7 +20,7 @@ CARD_SCHEMA = {
             "actions", "urgency", "reply_needed", "reply_type", "warnings", "sources",
         ],
         "properties": {
-            "doc_type": {"type": "string", "description": "Belgenin türü, ör. 'Vergi/ceza ihbarnamesi'"},
+            "doc_type": {"type": "string", "description": "Belgenin türü, insanların anlayacağı Türkçe adıyla (ör. \"İcra ödeme emri\"), kod adı değil"},
             "issuer": {"type": "string", "description": "Belgeyi gönderen kurum veya kişi"},
             "summary": {"type": "string", "description": "2-4 cümlelik sade Türkçe özet"},
             "amount": _nullable("string"),
@@ -92,6 +92,14 @@ Kurallar:
 - Ortaokul mezunu birinin anlayacağı dille yaz; hukuki terimleri parantez içinde açıkla.
 - Emin olmadığın şeyi uydurma; warnings alanına yaz.
 - Hukuki tavsiye vermezsin; gerekiyorsa avukata veya ilgili kuruma danışmayı öner.
+"""
+
+
+ANALYST_MCP = """
+- sade-takvim MCP araçları: tatilleri resmi_tatiller ile al; şüpheli bir son günü
+  is_gunu_mu ile kontrol et; yapılacak her iş için son gün kesinleşince
+  takvim_etkinligi_olustur ile bir takvim etkinliği oluştur (başlık kısa ve net,
+  açıklamada ne yapılacağı ve yasal dayanak). Araçları paralel çağırabilirsin.
 """
 
 

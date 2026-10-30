@@ -24,3 +24,22 @@ MODEL_ANALYST = os.getenv("SADE_MODEL_ANALYST", "sade-analyst")
 MODEL_ANALYST_OUTAGE = os.getenv("SADE_MODEL_ANALYST_OUTAGE", "sade-analyst-demo")
 MODEL_OCR = os.getenv("SADE_MODEL_OCR", "sade-ocr")
 MODEL_CLASSIFIER = os.getenv("SADE_MODEL_CLASSIFIER", "mistralai/ministral-3-8b")
+
+# Otari calls back into this app (our MCP server and guardrail service)
+# through a public tunnel. Those endpoints live under /x/<secret>/ and
+# nothing else is served to the tunnel.
+PUBLIC_SECRET = os.getenv("SADE_PUBLIC_SECRET", "")
+_TUNNEL_FILE = ROOT / ".tunnel-url"
+
+
+def public_url() -> str | None:
+    """The tunnel's https URL: SADE_PUBLIC_URL, or the file scripts/tunnel.sh writes."""
+    url = os.getenv("SADE_PUBLIC_URL")
+    if not url and _TUNNEL_FILE.exists():
+        url = _TUNNEL_FILE.read_text().strip()
+    return url.rstrip("/") if url and PUBLIC_SECRET else None
+
+
+def callback_base() -> str | None:
+    url = public_url()
+    return f"{url}/x/{PUBLIC_SECRET}" if url else None

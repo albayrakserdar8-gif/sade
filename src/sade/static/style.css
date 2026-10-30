@@ -88,3 +88,6 @@ pre.out { border-left: 3px solid var(--ok); }
 .toggle small { grid-column: 2; color: var(--muted); font-size: 12px; }
 .sources { padding-left: 18px; font-size: 14px; }
 .sources a { color: var(--accent); }
+.cal { font-size: 12px; margin-left: 6px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--line);
+  color: var(--text); text-decoration: none; white-space: nowrap; }
+.cal:hover { border-color: var(--accent); }

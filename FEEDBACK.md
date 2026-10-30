@@ -79,3 +79,14 @@ Friction and wins noted while building, for the final feedback submission.
   show sources we had to ask the model to repeat the URLs it saw.
 - Cost reality check for one analysis with tools: tokens ~$0.001, two
   sandbox runs ~$0.02, two web searches ~$0.03. Tools are 98% of the bill.
+- **MCP over a tunnel works well.** Inline `mcp_servers` pointing at our own
+  streamable-HTTP server (Python `mcp` 2.x, behind a Cloudflare quick tunnel)
+  worked on the Responses API with DeepSeek: the model called all three tools
+  (holidays, working-day check, create calendar event) in the same tool loop
+  as code execution and web search. Putting a run id in the server URL was
+  the only way to show MCP calls in our UI, since Chat/Responses output does
+  not report them.
+- Seen once: while our MCP server was restarting, the streamed Responses call
+  came back as a CloudFront `504` HTML page after ~30 s, not as a JSON error or
+  an MCP tool error the model could recover from. Likely the gateway waits on
+  the MCP connection before sending any bytes.
