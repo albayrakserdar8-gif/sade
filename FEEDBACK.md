@@ -7,6 +7,8 @@ kept while building, with reproduction steps.
 
 Issue opened from this work: [mozilla-ai/otari#2727](https://github.com/mozilla-ai/otari/issues/2727),
 streamed requests with gateway-run tools don't fall back to the next routing candidate.
+(The GitHub account that opened it was suspended on 30 October, so the issue is
+hidden for now; its full text is the "Bug: routing fallback…" section below.)
 
 ## The three questions
 
