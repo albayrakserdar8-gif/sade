@@ -1,7 +1,7 @@
 # Demo video script (about 4 minutes)
 
 Each scene: what is on screen, the Otari feature it shows, and the narration.
-The narration below is the exact text of the voice-over.
+The narration below is the exact text of the voice-over, read by Ming-3.0-tts-0.5B (open-weight, MIT) with mlx-audio on a Mac; names are respelled for the voice (e.g. Sade as "Sah-deh").
 
 | # | Screen | Otari feature |
 |---|---|---|
@@ -49,7 +49,7 @@ The narration below is the exact text of the voice-over.
 
 **12.** And if masking is turned off, the personal-data guardrail stops the request as well.
 
-**13.** Budgets. Mehmet is on a trial plan of five cents a day, and he has used it up. Otari refuses his next request before any model runs, and the app tells him his limit is reached.
+**13.** Now for budgets. Mehmet is on a trial plan of five cents a day, and he has used it up. Otari refuses his next request before any model runs, and the app tells him his limit is reached.
 
 **14.** In the Otari dashboard, there is a monthly ceiling for the whole organization, and a budget on each user's key.
 
@@ -57,4 +57,4 @@ The narration below is the exact text of the voice-over.
 
 **16.** And every analysis appears as one session on the Otari dashboard, with its calls, tokens and cost.
 
-**17.** Open-weight models in distinct roles, routing and fallbacks, code execution, web search, MCP, guardrails, budgets, and per-user budgets. All through Otari. The code is on GitHub, at sadopc slash sade. Thanks for watching.
+**17.** Open-weight models in distinct roles, routing and fallbacks, code execution, web search, MCP, guardrails, budgets, and per-user budgets. All through Otari. The code is on GitHub, and the link is on screen. Thank you for watching.

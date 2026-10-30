@@ -98,6 +98,11 @@ our bill), and the tenant gaps listed above.
   response.
 - MCP calls and web-search sources in Chat/Responses output.
 - A "simulate failure" switch for testing routing policies.
+- Speech: no text-to-speech model in the catalog (`/api/v1/audio/speech`
+  answers `invalid_model`), and `/api/v1/audio/transcriptions` with
+  `mistralai/voxtral-mini-3b-2507` answers "Provider doesn't support audio
+  transcription". We voiced the demo video locally instead (Ming-3.0-tts with
+  mlx-audio) and checked it with a local Whisper.
 
 ## Notes kept while building
 

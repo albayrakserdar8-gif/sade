@@ -3,7 +3,7 @@
 **Plain-language help with Turkish official letters, built on open-weight models through [Otari](https://otari.ai).**
 
 Built for MozFest *Developers Wilding: Online* (Mozilla.ai). Hackathon branch: `devs-wilding`.
-**Demo video (3:35):** [sade-demo.mp4](https://github.com/sadopc/sade/releases/download/demo-video/sade-demo.mp4) · script: [docs/demo-script.md](docs/demo-script.md).
+**Demo video (3:51):** [sade-demo.mp4](https://github.com/sadopc/sade/releases/download/demo-video/sade-demo.mp4) · script: [docs/demo-script.md](docs/demo-script.md).
 
 ![Sade analysing an enforcement order photographed with a phone](docs/img/card.jpg)
 
