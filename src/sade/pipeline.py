@@ -34,12 +34,12 @@ def new_run_id() -> str:
 
 
 async def ocr(image_uri: str, *, run_id: str, api_key: str | None = None,
-              metadata: dict | None = None) -> tuple[str, otari.Call]:
+              metadata: dict | None = None, model: str | None = None) -> tuple[str, otari.Call]:
     return await otari.chat(
         role="ocr",
+        model=model or config.MODEL_OCR,
         api_key=api_key,
         metadata=metadata,
-        model=config.MODEL_OCR,
         max_tokens=2500,
         conversation_id=run_id,
         messages=[
@@ -90,7 +90,11 @@ async def analyze(
     who = {"end_user": persona.id} if persona else {}
     try:
         if image_uri:
-            text, call = await ocr(image_uri, run_id=run_id, api_key=api_key, metadata=who)
+            # The outage demo runs on the tool-free calls (OCR, draft): with
+            # streaming plus gateway-run tools, Otari does not fall back (see
+            # FEEDBACK.md), so the analysis call always uses sade-analyst.
+            text, call = await ocr(image_uri, run_id=run_id, api_key=api_key, metadata=who,
+                                   model=config.MODEL_ANALYST_OUTAGE if simulate_outage else None)
             calls.append(call)
         assert text is not None
 
@@ -128,7 +132,7 @@ async def analyze(
 
         data, call = await otari.responses(
             role="analyze",
-            model=config.MODEL_ANALYST_OUTAGE if simulate_outage else config.MODEL_ANALYST,
+            model=config.MODEL_ANALYST,
             instructions=instructions,
             input=prompts.analyst_input(masked.text),
             text_format=prompts.CARD_SCHEMA,
@@ -154,6 +158,10 @@ async def analyze(
         )
         calls.append(call)
         card = otari.output_json(data)
+        # Models sometimes echo the classifier's code ("icra_odeme_emri").
+        dt = str(card.get("doc_type") or "")
+        if "_" in dt or not dt:
+            card["doc_type"] = prompts.DOC_LABELS.get(dt) or prompts.DOC_LABELS.get(doc_class["doc_type"], dt)
         card["service_date"] = dates.to_iso(card.get("service_date"))
         for action in card.get("actions", []):
             action["deadline"] = dates.to_iso(action.get("deadline"))
@@ -169,7 +177,7 @@ async def analyze(
     if persona:
         personas.record(persona.id, sum(c.cost_usd for c in calls))
     RUNS[run_id] = {"masked_text": masked.text, "mapping": masked.mapping, "card": card,
-                    "persona": persona.id if persona else None}
+                    "persona": persona.id if persona else None, "simulate_outage": simulate_outage}
     mcp_calls = mcp_takvim.CALL_LOG.pop(run_id, [])
     calendar = []
     for c in mcp_calls:
@@ -211,7 +219,7 @@ async def draft(run_id: str) -> dict:
     card = run["card"]
     text, call = await otari.chat(
         role="draft",
-        model=config.MODEL_ANALYST,
+        model=config.MODEL_ANALYST_OUTAGE if run.get("simulate_outage") else config.MODEL_ANALYST,
         max_tokens=2500,
         temperature=0.2,
         conversation_id=run_id,

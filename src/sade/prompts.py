@@ -126,6 +126,19 @@ DOC_TYPES = {
     "diger": "Diğer",
 }
 
+# Short, human labels for the card title.
+DOC_LABELS = {
+    "vergi_ihbarnamesi": "Vergi / ceza ihbarnamesi",
+    "odeme_emri_amme": "Vergi dairesi ödeme emri",
+    "icra_odeme_emri": "İcra ödeme emri",
+    "ihtarname": "Noter ihtarnamesi",
+    "trafik_cezasi": "Trafik idari para cezası",
+    "mahkeme_tebligati": "Mahkeme tebligatı",
+    "banka_yazisi": "Banka yazısı",
+    "sgk_yazisi": "SGK yazısı",
+    "e_devlet_bildirimi": "e-Devlet bildirimi",
+}
+
 CLASSIFY_SCHEMA = {
     "type": "json_schema",
     "json_schema": {

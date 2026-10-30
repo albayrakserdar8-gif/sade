@@ -123,3 +123,25 @@ Friction and wins noted while building, for the final feedback submission.
   name isn't shown, so with several keys you can't tell which is which.
 - An API key cannot read its own remaining budget, so the app keeps its own
   tally from `usage.cost_usd` to show users how much they have left.
+
+## Bug: routing fallback does not happen on streamed requests with gateway-run tools
+
+**Repro (hosted otari.ai, 30 Oct 2026).** Policy `sade-analyst-demo`: main
+candidate DeepSeek V4.1 Flash 1017 on Together AI with an invalid org key
+(so it fails with 401), backup DeepSeek V4.1 Flash 1017 on DeepInfra.
+
+| Request | Result |
+|---|---|
+| `POST /responses`, `stream: true`, no tools | 200, `Otari-Fallback: true`, `Otari-Attempt-Count: 2` |
+| same + `guardrails` only | falls back |
+| same + `tools: [{"type": "code_interpreter"}]` | stream error `provider_credential_rejected`, no fallback |
+| same + `tools: [{"type": "otari_web_search"}]` | same error, no fallback |
+| same + inline `mcp_servers` | same error, no fallback |
+| `POST /responses`, **not streamed**, + `code_interpreter` | falls back (attempt 2) |
+| `POST /chat/completions`, `stream: true`, + `otari_code_execution` | `Otari-Attempt-Count: 1`, `data: {"error": {... "provider_credential_rejected"}}` |
+
+So with streaming plus any gateway-run tool, the first candidate's failure is
+streamed to the client instead of moving to `on_failure`, even though nothing
+had been generated yet. On hosted, non-streamed requests are cut at ~30 s by
+the edge, so for long tool-using requests there is effectively no fallback.
+Workaround in Sade: the outage demo runs on tool-free calls (OCR, draft).

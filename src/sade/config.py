@@ -19,7 +19,8 @@ OTARI_API_KEY = os.getenv("OTARI_API_KEY", "")
 #   sade-analyst       DeepSeek V4.1 Flash 1017 -> Qwen3 235B Instruct 2507
 #   sade-ocr           DeepSeek V4.1 Flash 1017 -> Qwen3 VL 235B
 #   sade-analyst-demo  DeepSeek on a provider with a deliberately broken key
-#                      -> DeepSeek on DeepInfra -> Qwen3 235B (live fallback demo)
+#                      -> DeepSeek on DeepInfra -> Qwen3 235B (live fallback demo,
+#                      used for OCR and drafts when "simulate outage" is on)
 MODEL_ANALYST = os.getenv("SADE_MODEL_ANALYST", "sade-analyst")
 MODEL_ANALYST_OUTAGE = os.getenv("SADE_MODEL_ANALYST_OUTAGE", "sade-analyst-demo")
 MODEL_OCR = os.getenv("SADE_MODEL_OCR", "sade-ocr")
