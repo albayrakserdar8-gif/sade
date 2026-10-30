@@ -86,3 +86,5 @@ pre.out { border-left: 3px solid var(--ok); }
 @media (max-width: 860px) { .calls { display: block; overflow-x: auto; } }
 .toggle { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; font-size: 14px; cursor: pointer; }
 .toggle small { grid-column: 2; color: var(--muted); font-size: 12px; }
+.sources { padding-left: 18px; font-size: 14px; }
+.sources a { color: var(--accent); }

@@ -17,7 +17,7 @@ CARD_SCHEMA = {
         "additionalProperties": False,
         "required": [
             "doc_type", "issuer", "summary", "amount", "service_date",
-            "actions", "urgency", "reply_needed", "reply_type", "warnings",
+            "actions", "urgency", "reply_needed", "reply_type", "warnings", "sources",
         ],
         "properties": {
             "doc_type": {"type": "string", "description": "Belgenin türü, ör. 'Vergi/ceza ihbarnamesi'"},
@@ -45,6 +45,20 @@ CARD_SCHEMA = {
             "reply_needed": {"type": "boolean"},
             "reply_type": {**_nullable("string"), "description": "Gerekirse hangi dilekçe/cevap"},
             "warnings": {"type": "array", "items": {"type": "string"}},
+            "sources": {
+                "type": "array",
+                "description": "Web aramasında gerçekten görülen resmi kaynaklar",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["title", "url", "supports"],
+                    "properties": {
+                        "title": {"type": "string"},
+                        "url": {"type": "string"},
+                        "supports": {"type": "string", "description": "Bu kaynak neyi doğruluyor"},
+                    },
+                },
+            },
         },
     },
 }
@@ -68,6 +82,10 @@ Kurallar:
   Python'da (datetime) hesapla. Bütün süreleri TEK bir kod çalıştırmasında hesapla;
   aracı en fazla bir kez kullan. Kod her süre için tebliğ tarihini, süreyi, ham son
   günü ve haftanın gününü, kaydırılmış son günü yazdırsın. Resmi tatiller: {holidays}
+- Yasal dayanağı (kanun maddesi ve süre) web arama aracıyla resmi kaynaktan doğrula
+  (mevzuat.gov.tr, gib.gov.tr, adalet.gov.tr, resmigazete.gov.tr, turkiye.gov.tr).
+  En fazla 2 arama yap. Bulduğun kaynakları sources alanına yaz; yalnızca arama veya
+  sayfa okuma sonucunda gerçekten gördüğün URL'leri yaz, URL uydurma.
 - "days" alanı kanundaki süredir (ör. 7, 15, 30); kalan gün sayısı DEĞİLDİR.
 - Her yapılacak iş için: ne yapılmalı, son gün, kaç gün, yasal dayanak ve
   yapılmazsa ne olacağı.

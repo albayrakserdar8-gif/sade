@@ -70,3 +70,12 @@ Friction and wins noted while building, for the final feedback submission.
   the tokens cost $0.0005. `max_tool_iterations: 3` plus a prompt rule
   brought it to 2 runs. A per-request cap on code runs (like `max_uses` for
   search) or showing sandbox cost in the response would help.
+- `{"type": "otari_web_fetch", "max_uses": 1}` is refused with
+  `400 otari_web_fetch declarations may contain only the type field`, while
+  `otari_web_search` accepts `max_uses`. Inconsistent; there's no way to cap
+  fetches per request except the shared `web_search_max_calls`.
+- In Responses API output, `web_search_call` items carry only the query, not
+  the result URLs (Chat Completions gets `otari_tool_calls[].sources`). To
+  show sources we had to ask the model to repeat the URLs it saw.
+- Cost reality check for one analysis with tools: tokens ~$0.001, two
+  sandbox runs ~$0.02, two web searches ~$0.03. Tools are 98% of the bill.

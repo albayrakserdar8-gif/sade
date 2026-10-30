@@ -157,7 +157,13 @@ async def responses(
             logs = "".join(o.get("logs", "") for o in item.get("outputs") or [] if o.get("type") == "logs")
             call.code_runs.append({"code": item.get("code", ""), "output": logs})
         elif item.get("type") == "web_search_call":
-            call.web_calls.append({"type": "web_search", "status": item.get("status"), "action": item.get("action")})
+            action = item.get("action") or {}
+            call.web_calls.append({
+                "type": "web_fetch" if action.get("type") in ("open_page", "fetch") else "web_search",
+                "status": item.get("status"),
+                "query": action.get("query"),
+                "url": action.get("url"),
+            })
     return final, call
 
 

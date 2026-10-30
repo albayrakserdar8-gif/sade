@@ -79,6 +79,8 @@ function renderCard(c) {
       <p class="consequence">Yapılmazsa: ${esc(a.consequence)}</p>
     </li>`).join("");
   const warnings = (c.warnings || []).map((w) => `<li>${esc(w)}</li>`).join("");
+  const sources = (c.sources || []).filter((x) => /^https?:\/\//.test(x.url))
+    .map((x) => `<li><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title)}</a> — ${esc(x.supports)}</li>`).join("");
   return `
     <div class="card-head">
       <div>
@@ -95,6 +97,7 @@ function renderCard(c) {
     </div>
     <h3>Ne yapmalısın?</h3>
     <ol class="actions">${actions}</ol>
+    ${sources ? `<h3>Kaynaklar (web'den doğrulandı)</h3><ul class="sources">${sources}</ul>` : ""}
     ${warnings ? `<div class="warnings"><strong>Dikkat</strong><ul>${warnings}</ul></div>` : ""}`;
 }
 
@@ -109,6 +112,7 @@ function renderCalls(calls, total) {
       <td>${c.duration_ms ? (c.duration_ms / 1000).toFixed(1) + " sn" : ""}</td>
       <td>$${Number(c.cost_usd || 0).toFixed(4)}</td>
     </tr>
+    ${(c.web_calls || []).map((w) => `<tr class="sub"><td colspan="5">${w.type === "web_fetch" ? "Sayfa okundu" : "Web araması"}: <em>${esc(w.query || w.url || "")}</em> ${w.status === "completed" ? "" : `<span class="chip">${esc(w.status)}</span>`}</td></tr>`).join("")}
     ${(c.code_runs || []).map((r) => `<tr class="sub"><td colspan="5"><details><summary>Sandbox'ta çalışan kod</summary><pre>${esc(r.code)}</pre><pre class="out">${esc(r.output)}</pre></details></td></tr>`).join("")}
   `).join("");
   return `<table class="calls"><thead><tr><th>Rol</th><th>Model</th><th>Sağlayıcı</th><th>Süre</th><th>Maliyet</th></tr></thead>

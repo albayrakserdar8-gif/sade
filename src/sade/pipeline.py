@@ -88,11 +88,16 @@ async def analyze(
             instructions=instructions,
             input=prompts.analyst_input(masked.text),
             text_format=prompts.CARD_SCHEMA,
-            # Otari runs the model's Python in its own sandbox, for any model.
-            tools=[{"type": "code_interpreter"}],
+            tools=[
+                # Otari runs the model's Python in its own sandbox, for any model.
+                {"type": "code_interpreter"},
+                # Otari's own web search and page fetch, to check the legal basis.
+                {"type": "otari_web_search", "max_uses": 2},
+                {"type": "otari_web_fetch"},
+            ],
             headers={"Otari-Code-Execution": "otari"},
-            # Each sandbox run is billed; one or two runs are enough here.
-            extra={"max_tool_iterations": 3},
+            # Every tool call is billed, so keep the tool loop short.
+            extra={"max_tool_iterations": 5},
             conversation_id=run_id,
             metadata={"doc_type": doc_class["doc_type"]},
         )
