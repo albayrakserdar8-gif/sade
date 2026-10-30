@@ -104,3 +104,14 @@ def unmask(text: str, mapping: dict[str, str]) -> str:
     for placeholder, value in mapping.items():
         text = text.replace(placeholder, value)
     return text
+
+
+def unmask_deep(value, mapping: dict[str, str]):
+    """unmask() every string inside nested dicts and lists."""
+    if isinstance(value, str):
+        return unmask(value, mapping)
+    if isinstance(value, list):
+        return [unmask_deep(v, mapping) for v in value]
+    if isinstance(value, dict):
+        return {k: unmask_deep(v, mapping) for k, v in value.items()}
+    return value

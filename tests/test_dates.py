@@ -29,3 +29,11 @@ def test_find_dates():
     found = dates.find_dates("Tebliğ Tarihi: 16.10.2026\nİhlal: 11 Ekim 2026 günü")
     assert [f["date"] for f in found] == ["2026-10-16", "2026-10-11"]
     assert found[0]["context"] == "Tebliğ Tarihi:"
+
+
+def test_to_iso():
+    assert dates.to_iso("2026-11-16") == "2026-11-16"
+    assert dates.to_iso("16.11.2026 Pazartesi") == "2026-11-16"
+    assert dates.to_iso("16 Kasım 2026") == "2026-11-16"
+    assert dates.to_iso("belirtilmemiş") is None
+    assert dates.to_iso(None) is None

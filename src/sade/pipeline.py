@@ -71,7 +71,13 @@ async def analyze(
         doc_class, call = await classify(masked.text, run_id=run_id)
         calls.append(call)
 
-        instructions = prompts.ANALYST.format(today=date.today().isoformat())
+        today = date.today()
+        holidays = ", ".join(
+            f"{d.isoformat()} ({name})"
+            for year in (today.year, today.year + 1)
+            for d, name in dates.holidays_in(year) if d >= today
+        )
+        instructions = prompts.ANALYST.format(today=today.isoformat(), holidays=holidays)
         hint = prompts.TYPE_HINTS.get(doc_class["doc_type"])
         if hint:
             instructions += f"\nBelge türü ön sınıflandırması: {doc_class['doc_type']}. Hatırlatma: {hint}\n"
@@ -82,11 +88,19 @@ async def analyze(
             instructions=instructions,
             input=prompts.analyst_input(masked.text),
             text_format=prompts.CARD_SCHEMA,
+            # Otari runs the model's Python in its own sandbox, for any model.
+            tools=[{"type": "code_interpreter"}],
+            headers={"Otari-Code-Execution": "otari"},
+            # Each sandbox run is billed; one or two runs are enough here.
+            extra={"max_tool_iterations": 3},
             conversation_id=run_id,
             metadata={"doc_type": doc_class["doc_type"]},
         )
         calls.append(call)
         card = otari.output_json(data)
+        card["service_date"] = dates.to_iso(card.get("service_date"))
+        for action in card.get("actions", []):
+            action["deadline"] = dates.to_iso(action.get("deadline"))
     except otari.OtariError as e:
         if e.call:
             calls.append(e.call)
@@ -100,7 +114,9 @@ async def analyze(
         "pii": masked.counts,
         "dates": [{k: v for k, v in d.items() if k != "pos"} for d in dates.find_dates(masked.text)],
         "doc_class": doc_class,
-        "card": card,
+        # The model only ever saw placeholders; put the person's own data back
+        # for display, here on their side.
+        "card": privacy.unmask_deep(card, masked.mapping),
         "calls": [c.to_dict() for c in calls],
         "cost_usd": round(sum(c.cost_usd for c in calls), 6),
     }

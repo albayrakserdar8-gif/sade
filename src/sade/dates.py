@@ -124,3 +124,15 @@ def _append(out, text, m, day, month, year):
         "context": text[line_start:m.start()].strip()[-60:],
         "pos": m.start(),
     })
+
+
+def to_iso(value: str | None) -> str | None:
+    """Normalise a model-written date ('2026-11-16', '16.11.2026 Pazartesi',
+    '16 Kasım 2026') to ISO; return None if there is no date in it."""
+    if not value:
+        return None
+    m = re.search(r"(\d{4})-(\d{2})-(\d{2})", value)
+    if m:
+        return m.group(0)
+    found = find_dates(value)
+    return found[0]["date"] if found else None

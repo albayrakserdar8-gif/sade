@@ -65,3 +65,8 @@ Friction and wins noted while building, for the final feedback submission.
 - Routing policy UI: creating a fallback is quick, but the model combobox list
   doesn't narrow while typing in some cases, and dropdown popovers stay
   floating on the page after the dialog loses focus.
+- **Sandbox runs dominate cost and the model decides how many.** One letter
+  analysis made 9 `code_interpreter` calls (~$0.01 each, $0.09 total) while
+  the tokens cost $0.0005. `max_tool_iterations: 3` plus a prompt rule
+  brought it to 2 runs. A per-request cap on code runs (like `max_uses` for
+  search) or showing sandbox cost in the response would help.

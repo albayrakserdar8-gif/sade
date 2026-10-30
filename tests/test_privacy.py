@@ -35,3 +35,11 @@ def test_mask_and_unmask_roundtrip():
 def test_invalid_eleven_digit_number_is_not_masked():
     m = privacy.mask("Referans: 12345678901")
     assert m.mapping == {}
+
+
+def test_unmask_deep():
+    mapping = {"[AD_1]": "Zeynep Arslan"}
+    card = {"summary": "[AD_1] borçlu", "actions": [{"detail": "[AD_1] öder"}], "days": 30}
+    assert privacy.unmask_deep(card, mapping) == {
+        "summary": "Zeynep Arslan borçlu", "actions": [{"detail": "Zeynep Arslan öder"}], "days": 30,
+    }

@@ -64,6 +64,11 @@ Kurallar:
   sayılmaz; son gün hafta sonuna veya resmi tatile denk gelirse sonraki iş gününe kayar.
   Elektronik tebligat, e-Tebligat adresine ulaştığı günü izleyen 5. günün sonunda
   tebliğ edilmiş sayılır.
+- Tarih hesaplarını ASLA kafadan yapma: son tarihleri kod çalıştırma aracıyla
+  Python'da (datetime) hesapla. Bütün süreleri TEK bir kod çalıştırmasında hesapla;
+  aracı en fazla bir kez kullan. Kod her süre için tebliğ tarihini, süreyi, ham son
+  günü ve haftanın gününü, kaydırılmış son günü yazdırsın. Resmi tatiller: {holidays}
+- "days" alanı kanundaki süredir (ör. 7, 15, 30); kalan gün sayısı DEĞİLDİR.
 - Her yapılacak iş için: ne yapılmalı, son gün, kaç gün, yasal dayanak ve
   yapılmazsa ne olacağı.
 - Ortaokul mezunu birinin anlayacağı dille yaz; hukuki terimleri parantez içinde açıkla.
