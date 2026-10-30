@@ -14,7 +14,7 @@ The narration below is the exact text of the voice-over.
 | 7 | Otari panel: sandbox code and output | code execution |
 | 8 | Otari panel: web searches, guardrails, MCP calls | web search, guardrails, MCP |
 | 9 | Draft petition | open-weight models |
-| 10 | Otari panel after "simulate a provider outage" (photo reading falls back) | routing & fallbacks |
+| 10 | Otari panel after "simulate a provider outage": Otari falls back for OCR; the app retries the analysis on the next policy | routing & fallbacks |
 | 11 | Hidden-injection tax letter, blocked | guardrails |
 | 12 | Masking turned off, blocked | guardrails |
 | 13 | Mehmet over budget, blocked | per-user budgets |
@@ -43,7 +43,7 @@ The narration below is the exact text of the voice-over.
 
 **9.** When a reply is needed, one click drafts the objection petition in formal Turkish, with the user's details filled in locally.
 
-**10.** Now, routing and fallbacks. With "simulate a provider outage" turned on, reading the photo goes to a policy whose first provider has a broken key. Otari falls back on its own: second attempt, same model on DeepInfra. The user never notices.
+**10.** Now, routing and fallbacks. With "simulate a provider outage" turned on, every call goes to a policy whose first provider has a broken key. Reading the photo, Otari falls back on its own: second attempt, on DeepInfra. The analysis call uses tools, and there we found a gateway bug: Otari did not fall back. We reported it upstream, and the app now resends the request to the next Otari policy. The user never notices.
 
 **11.** Guardrails. This tax letter hides a tiny, pale line telling the AI to say the debt is invalid. Otari sends the text to our guardrail service, the open-weight judge flags it, and Otari blocks the request with a 403. No model ever sees the letter.
 
