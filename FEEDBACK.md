@@ -1,8 +1,107 @@
-# Otari feedback log
+# Otari feedback
 
-Friction and wins noted while building, for the final feedback submission.
+Feedback from building [Sade](README.md) on hosted otari.ai for MozFest
+*Developers Wilding: Online*: two weeks, one developer, all AI calls through
+Otari, open-weight models only. The summary comes first, then the notes we
+kept while building, with reproduction steps.
 
-## 2026-10-30 — onboarding
+Issue opened from this work: [mozilla-ai/otari#2727](https://github.com/mozilla-ai/otari/issues/2727),
+streamed requests with gateway-run tools don't fall back to the next routing candidate.
+
+## The three questions
+
+**When were you most tempted to bypass Otari and call the provider directly, and what happened?**
+
+Three times.
+1. A vision request (OCR of a phone photo) died after 30 s with a CloudFront 504
+   HTML page, because hosted Otari cuts non-streamed responses at the edge. We
+   stayed on Otari and moved every call to streaming.
+2. Our fallback policy fell back fine in a quick test, but not once the
+   analysis call declared code execution, web search and MCP. Writing our own
+   provider failover against DeepInfra/Fireworks directly looked easier than
+   debugging the gateway. We stayed on Otari: the app now retries on a second
+   Otari policy, and we filed #2727.
+3. Every guardrail in the catalog needs a third-party key, and `any_llm` is
+   closed to tenants. We nearly ran Qwen3Guard / gpt-oss-safeguard as a
+   plain model call in our own code and skipped Otari's guardrails. Instead we
+   kept Otari's request-level `guardrails` and pointed them at a small
+   `/validate` service of ours, which calls gpt-oss-safeguard *through* Otari.
+
+**What did you build yourself that Otari should have handled?**
+
+- **Fallback across policies** for streamed tool requests (the #2727 workaround):
+  detect an SSE error before any output, resend to the next policy.
+- **A keyless open-model guardrail**: a `/validate` service with a Turkish PII
+  check and an injection judge, exposed through a Cloudflare tunnel so Otari
+  can call it. Otari already serves the judge model; it should be able to
+  run it as a guardrail on the organization's own key.
+- **Per-user budgets for an app's own users**: one Otari API key per user,
+  created by hand, plus our own spend tally, because tenants can't create
+  service keys and an API key can't read its remaining budget.
+- **Visibility of tool calls**: MCP calls are not reported in Chat or
+  Responses output, so our MCP server logs calls per run; Responses
+  `web_search_call` items carry no result URLs, so the model has to repeat them.
+- **A public tunnel** so the hosted gateway can reach our MCP server and
+  guardrail service.
+- **A safe way to test fallbacks**: we added a deliberately broken provider
+  key, which also breaks that provider for everything else in the org.
+
+**Would you keep using Otari if it weren't required? Why?**
+
+Yes, for this kind of app. One key gave us 160 models, many open-weight, with
+prices, and the gateway-run sandbox and web search work with *any* of them.
+That is what lets an open model like DeepSeek V4.1 Flash compute deadlines in
+code and check the law on the web. Routing policies, per-call cost in every
+response, routing headers, budgets that refuse before any model runs, and
+sessions on the dashboard are all things we would otherwise write ourselves.
+What would make us hesitate on hosted: the 30 s edge cut for non-streamed
+calls, #2727, tool costs we can't cap per request (sandbox runs and web searches are ~95% of
+our bill), and the tenant gaps listed above.
+
+## What worked well
+
+- One key, 160 models, prices in `/api/v1/models`; open models with tools.
+- Responses API + `code_interpreter` + `json_schema` on DeepSeek (no native
+  Responses API): the sandbox ran, `code_interpreter_call` items came back with
+  code and logs, and the answer matched the schema.
+- `otari_web_search` found official sources in one call.
+- Routing policies, set up in a minute in the dashboard; `Otari-Model`,
+  `Otari-Provider`, `Otari-Fallback`, `Otari-Attempt-Count` headers.
+- Inline `mcp_servers` to our own streamable-HTTP server, in the same tool
+  loop as code and search.
+- Request-level `guardrails` with our own URL: block mode returns `403
+  guardrail_violation` and no model is called.
+- Budgets: `403 budget_exceeded` with `Otari-Budget-Scope` and `Retry-After`.
+- `metadata` + `Otari-Conversation-Id`: each analysis is one session on the
+  dashboard.
+
+## What didn't work (details and repro below)
+
+- Streamed requests with gateway-run tools don't fall back (#2727).
+- Non-streamed requests cut at ~30 s with a CloudFront HTML 504.
+- Reopening the dashboard Overview silently revoked our API key.
+- `/api/v1/tools` says web search is available while the workspace has web
+  access off.
+- Budget holds ignore tool costs: a $0.05/day key spent $0.083.
+- `otari_web_fetch` rejects `max_uses`, `otari_web_search` accepts it.
+- API keys list shows "Budget: None" for keys that have one; key ceilings are
+  listed by id, not name.
+- Seen once: an unreachable MCP server turned into a CloudFront 504 instead
+  of a tool error.
+
+## What's missing
+
+- Service keys or end-user budgets for tenants on hosted, and a way for a key
+  to read its remaining budget.
+- Keyless guardrails on open models served by Otari.
+- A per-request cap on sandbox runs, and sandbox/search cost broken out in the
+  response.
+- MCP calls and web-search sources in Chat/Responses output.
+- A "simulate failure" switch for testing routing policies.
+
+## Notes kept while building
+
+### 2026-10-30 — onboarding
 
 - **Reopening Overview silently revokes the API key.** The setup guide on the
   dashboard Overview shows a key "once". Navigating away and back to Overview
@@ -27,7 +126,7 @@ Friction and wins noted while building, for the final feedback submission.
   open models, even though the catalog lists open guard models (Qwen3Guard,
   Llama Guard 4) as chat models.
 
-## Wins
+### Wins
 
 - One key, 160 models (lots of open weights: Qwen, Llama, Gemma, Mistral,
   DeepSeek, gpt-oss) with prices in `/api/v1/models`.
@@ -43,7 +142,7 @@ Friction and wins noted while building, for the final feedback submission.
 - Routing headers (`Otari-Model`, `Otari-Provider`, `Otari-Fallback`,
   `Otari-Attempt-Count`) make it easy to show users which model actually answered.
 
-## Friction (continued)
+### Friction (continued)
 
 - Asking for `code_interpreter` with `"container": {"type": "auto"}` (the
   OpenAI shape) silently made the sandbox persist after the request
@@ -124,7 +223,9 @@ Friction and wins noted while building, for the final feedback submission.
 - An API key cannot read its own remaining budget, so the app keeps its own
   tally from `usage.cost_usd` to show users how much they have left.
 
-## Bug: routing fallback does not happen on streamed requests with gateway-run tools
+### Bug: routing fallback does not happen on streamed requests with gateway-run tools
+
+Filed as [mozilla-ai/otari#2727](https://github.com/mozilla-ai/otari/issues/2727).
 
 **Repro (hosted otari.ai, 30 Oct 2026).** Policy `sade-analyst-demo`: main
 candidate DeepSeek V4.1 Flash 1017 on Together AI with an invalid org key
@@ -144,4 +245,9 @@ So with streaming plus any gateway-run tool, the first candidate's failure is
 streamed to the client instead of moving to `on_failure`, even though nothing
 had been generated yet. On hosted, non-streamed requests are cut at ~30 s by
 the edge, so for long tool-using requests there is effectively no fallback.
-Workaround in Sade: the outage demo runs on tool-free calls (OCR, draft).
+Workaround in Sade: when a streamed request fails with a provider error
+before any output, the app resends it to the next Otari policy
+(`sade-analyst-demo` → `sade-analyst` → `sade-analyst-backup`); see
+`_with_policy_fallbacks` in `src/sade/otari.py`. Otari's own source and docs
+say the first round of a sandbox/web-search loop should fall over, so this
+looks like a hosted-only regression; MCP-only streams are not held by design.
