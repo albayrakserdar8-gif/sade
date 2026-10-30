@@ -2,8 +2,11 @@ from sade import mcp_takvim
 
 
 def test_holidays_and_business_day():
-    names = [h["ad"] for h in mcp_takvim.resmi_tatiller(2026, None)]
-    assert "Cumhuriyet Bayramı" in names
+    result = mcp_takvim.resmi_tatiller(2026, None)
+    full = [h["tarih"] for h in result["tam_gun_tatiller"]]
+    half = [h["tarih"] for h in result["yarim_gun_arifeler"]]
+    assert "2026-10-29" in full and "2026-10-28" not in full
+    assert "2026-10-28" in half
     r = mcp_takvim.is_gunu_mu("2026-11-21", None)
     assert r["is_gunu"] is False and r["sonraki_is_gunu"] == "2026-11-23"
     assert mcp_takvim.is_gunu_mu("29.10.2026", None)["neden"] == "Cumhuriyet Bayramı"

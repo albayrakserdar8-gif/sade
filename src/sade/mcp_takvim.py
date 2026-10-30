@@ -14,7 +14,7 @@ from __future__ import annotations
 import time
 import uuid
 from collections import defaultdict
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
@@ -51,17 +51,24 @@ def _parse(value: str) -> date:
 
 
 @server.tool()
-def resmi_tatiller(yil: int, ctx: Context) -> list[dict]:
-    """Türkiye'de verilen yıldaki resmi tatil günleri (tam gün) ve yarım gün arifeler.
-    Son tarih hesaplarında, son gün bunlardan birine denk gelirse sonraki iş gününe kayar."""
-    result = [
-        {"tarih": d.isoformat(), "ad": name, "gun": dates.WEEKDAYS_TR[d.weekday()], "tur": "tam gün"}
+def resmi_tatiller(yil: int, ctx: Context) -> dict:
+    """Türkiye'de verilen yıldaki resmi tatiller. Son tarih hesaplarında son gün bir
+    tam gün tatile denk gelirse sonraki iş gününe kayar. Yarım gün arifeler İŞ GÜNÜDÜR;
+    son gün arifeye denk gelirse kaymaz."""
+    tam = [
+        {"tarih": d.isoformat(), "ad": name, "gun": dates.WEEKDAYS_TR[d.weekday()]}
         for d, name in dates.holidays_in(yil)
-    ] + [
-        {"tarih": d.isoformat(), "ad": name, "gun": dates.WEEKDAYS_TR[d.weekday()], "tur": "yarım gün"}
+    ]
+    yarim = [
+        {"tarih": d.isoformat(), "ad": name, "gun": dates.WEEKDAYS_TR[d.weekday()]}
         for d, name in sorted(dates.HALF_DAYS.items()) if d.year == yil
     ]
-    _log(ctx, "resmi_tatiller", {"yil": yil}, f"{len(result)} gün")
+    result = {
+        "tam_gun_tatiller": tam,
+        "yarim_gun_arifeler": yarim,
+        "not": "Yalnızca tam_gun_tatiller son günü kaydırır; arifeler iş günü sayılır.",
+    }
+    _log(ctx, "resmi_tatiller", {"yil": yil}, f"{len(tam)} tatil + {len(yarim)} arife")
     return result
 
 
@@ -87,7 +94,7 @@ def _ics(title: str, day: date, description: str, remind_days: int) -> bytes:
         return s.replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
 
     uid = f"{uuid.uuid4()}@sade"
-    stamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     lines = [
         "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Sade//sade-takvim//TR", "CALSCALE:GREGORIAN",
         "BEGIN:VEVENT", f"UID:{uid}", f"DTSTAMP:{stamp}",
