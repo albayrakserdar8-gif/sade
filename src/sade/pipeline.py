@@ -54,7 +54,10 @@ async def classify(masked_text: str, *, run_id: str) -> tuple[dict, otari.Call]:
     return result, call
 
 
-async def analyze(*, text: str | None = None, image_uri: str | None = None, run_id: str | None = None) -> dict:
+async def analyze(
+    *, text: str | None = None, image_uri: str | None = None, run_id: str | None = None,
+    simulate_outage: bool = False,
+) -> dict:
     run_id = run_id or new_run_id()
     calls: list[otari.Call] = []
     try:
@@ -75,7 +78,7 @@ async def analyze(*, text: str | None = None, image_uri: str | None = None, run_
 
         data, call = await otari.responses(
             role="analyze",
-            model=config.MODEL_ANALYST,
+            model=config.MODEL_ANALYST_OUTAGE if simulate_outage else config.MODEL_ANALYST,
             instructions=instructions,
             input=prompts.analyst_input(masked.text),
             text_format=prompts.CARD_SCHEMA,

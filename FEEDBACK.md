@@ -55,3 +55,13 @@ Friction and wins noted while building, for the final feedback submission.
   not a JSON error, and no `Otari-Request-ID`. Streaming the same request
   works. Tool loops (code + search + MCP) easily pass 30 s, so on hosted every
   client effectively has to stream. Worth documenting, or raising the edge timeout.
+- **No way to test a fallback chain on hosted without breaking something.**
+  To show a fallback live we added a deliberately invalid Together AI provider
+  key (named `outage-sim`) and made a policy whose main candidate is DeepSeek
+  on Together. It works (`Otari-Attempt-Count: 2`, `Otari-Fallback: true`),
+  but the bogus key also becomes the org's Together default, so any request
+  that would be served by Together now fails over too. A "simulate failure"
+  option on a policy candidate (or a test header) would make this safe.
+- Routing policy UI: creating a fallback is quick, but the model combobox list
+  doesn't narrow while typing in some cases, and dropdown popovers stay
+  floating on the page after the dialog loses focus.

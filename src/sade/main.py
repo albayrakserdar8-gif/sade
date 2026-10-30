@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -45,7 +45,7 @@ def samples() -> list[dict]:
 
 
 @app.post("/api/analyze")
-async def analyze(file: UploadFile = File(...)) -> dict:
+async def analyze(file: UploadFile = File(...), simulate_outage: bool = Form(False)):
     data = await file.read()
     if len(data) > 15 * 1024 * 1024:
         raise HTTPException(413, "Dosya 15 MB'tan büyük olamaz.")
@@ -63,7 +63,7 @@ async def analyze(file: UploadFile = File(...)) -> dict:
         raise HTTPException(415, "PDF, fotoğraf veya metin dosyası yükleyin.")
 
     try:
-        return await pipeline.analyze(text=text, image_uri=image_uri)
+        return await pipeline.analyze(text=text, image_uri=image_uri, simulate_outage=simulate_outage)
     except otari.OtariError as e:
         return JSONResponse(
             status_code=502 if e.status >= 500 else e.status,
