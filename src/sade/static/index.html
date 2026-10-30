@@ -38,16 +38,22 @@
       <div id="empty" class="empty">Sonuç burada görünecek.</div>
       <div id="result" class="hidden">
         <div id="card"></div>
+        <div id="draftbox" class="hidden">
+          <h3>Dilekçe taslağı</h3>
+          <p class="note">Taslaktır: [doldurun: …] yerlerini tamamlayın, vermeden önce bir avukata veya ilgili kuruma danışın.</p>
+          <textarea id="draft" rows="18"></textarea>
+          <div class="row"><button id="copy" class="btn">Kopyala</button><a id="dl" class="btn" download="dilekce-taslagi.txt">İndir (.txt)</a></div>
+        </div>
         <details class="block" open>
           <summary>Otari paneli — bu analizde ne çalıştı</summary>
           <div id="otari"></div>
         </details>
-        <details class="block" open>
+        <details class="block" id="maskedblock" open>
           <summary>Modele giden metin (kişisel veriler maskeli)</summary>
           <div id="pii" class="chips"></div>
           <pre id="masked"></pre>
         </details>
-        <details class="block">
+        <details class="block" id="datesblock">
           <summary>Belgede bulunan tarihler</summary>
           <ul id="dates"></ul>
         </details>

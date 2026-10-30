@@ -42,7 +42,13 @@ async function analyze(file) {
   }
 }
 
+let lastRun = null;
+
 function render(r) {
+  lastRun = r;
+  $("draftbox").classList.add("hidden");
+  $("maskedblock").classList.remove("hidden");
+  $("datesblock").classList.remove("hidden");
   $("card").innerHTML = r.card ? renderCard(r.card, r.calendar || []) : '<p class="note">Analiz yapılamadı.</p>';
   $("otari").innerHTML = renderCalls(r.calls || [], r.cost_usd) + renderGuardrails(r.guardrails) + renderMcp(r.mcp);
   const pii = Object.entries(r.pii || {});
@@ -53,6 +59,31 @@ function render(r) {
   $("dates").innerHTML = (r.dates || [])
     .map((d) => `<li><strong>${esc(d.text)}</strong> — ${esc(d.context || "")}</li>`).join("");
   $("result").classList.remove("hidden");
+  const mk = $("mkdraft");
+  if (mk) mk.addEventListener("click", () => makeDraft(r.run_id, mk));
+}
+
+async function makeDraft(runId, btn) {
+  btn.disabled = true;
+  btn.textContent = "Dilekçe yazılıyor…";
+  try {
+    const res = await fetch(`/api/draft/${encodeURIComponent(runId)}`, { method: "POST" });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.detail || res.statusText);
+    $("draft").value = body.draft;
+    $("dl").href = URL.createObjectURL(new Blob([body.draft], { type: "text/plain;charset=utf-8" }));
+    $("draftbox").classList.remove("hidden");
+    lastRun.calls.push(body.call);
+    lastRun.cost_usd = Number(lastRun.cost_usd || 0) + Number(body.call.cost_usd || 0);
+    $("otari").innerHTML = renderCalls(lastRun.calls, lastRun.cost_usd) + renderGuardrails(lastRun.guardrails) + renderMcp(lastRun.mcp);
+    $("draftbox").scrollIntoView({ behavior: "smooth" });
+    btn.textContent = "Dilekçe hazır ↓";
+    loadPersonas();
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = "Tekrar dene";
+    setStatus(err.message, true);
+  }
 }
 
 const URGENCY = { "yüksek": "high", "orta": "mid", "düşük": "low" };
@@ -109,6 +140,7 @@ function renderCard(c, calendar) {
       <div><span>Tebliğ tarihi</span><strong>${esc(fmtDate(c.service_date))}</strong></div>
       ${c.reply_needed ? `<div><span>Gerekli cevap</span><strong>${esc(c.reply_type || "Evet")}</strong></div>` : ""}
     </div>
+    ${c.reply_needed ? `<button id="mkdraft" class="btn primary">✍️ ${esc(c.reply_type || "Cevap")} için dilekçe taslağı hazırla</button>` : ""}
     <h3>Ne yapmalısın?</h3>
     <ol class="actions">${actions}</ol>
     ${sources ? `<h3>Kaynaklar (web'den doğrulandı)</h3><ul class="sources">${sources}</ul>` : ""}
@@ -141,6 +173,7 @@ function renderBlocked(b) {
   const total = (b.calls || []).reduce((n, c) => n + Number(c.cost_usd || 0), 0);
   $("otari").innerHTML = renderCalls(b.calls || [], total) + renderGuardrails(b.guardrails);
   $("pii").innerHTML = ""; $("masked").textContent = ""; $("dates").innerHTML = "";
+  $("maskedblock").classList.add("hidden"); $("datesblock").classList.add("hidden"); $("draftbox").classList.add("hidden");
   $("result").classList.remove("hidden");
 }
 
@@ -204,6 +237,10 @@ async function loadPersonas() {
   }));
 }
 loadPersonas();
+
+$("copy").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText($("draft").value); $("copy").textContent = "Kopyalandı"; } catch { $("draft").select(); }
+});
 
 $("file").addEventListener("change", (e) => e.target.files[0] && analyze(e.target.files[0]));
 const drop = $("drop");

@@ -100,3 +100,10 @@ pre.out { border-left: 3px solid var(--ok); }
 .persona small { color: var(--muted); font-size: 11px; }
 .meter { display: block; height: 4px; border-radius: 4px; background: var(--line); overflow: hidden; margin: 4px 0 2px; }
 .meter span { display: block; height: 100%; background: var(--accent); }
+.btn { display: inline-block; padding: 8px 14px; border-radius: 9px; border: 1px solid var(--line); background: transparent;
+  color: var(--text); font: inherit; font-size: 14px; cursor: pointer; text-decoration: none; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; margin: 4px 0 8px; }
+.btn:disabled { opacity: .6; cursor: progress; }
+.row { display: flex; gap: 8px; margin-top: 8px; }
+textarea { width: 100%; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 12px; border-radius: 9px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--text); }

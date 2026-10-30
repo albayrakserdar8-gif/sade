@@ -24,6 +24,11 @@ def _guard_verdicts(run_id: str) -> list[dict]:
     return [{k: v for k, v in g.items() if k != "call"} for g in guard.GUARD_LOG.pop(run_id, [])]
 
 
+# run id -> what a follow-up (the reply draft) needs. Masked text and the
+# placeholder mapping stay in this process.
+RUNS: dict[str, dict] = {}
+
+
 def new_run_id() -> str:
     return f"sade-{uuid.uuid4().hex[:12]}"
 
@@ -163,6 +168,8 @@ async def analyze(
 
     if persona:
         personas.record(persona.id, sum(c.cost_usd for c in calls))
+    RUNS[run_id] = {"masked_text": masked.text, "mapping": masked.mapping, "card": card,
+                    "persona": persona.id if persona else None}
     mcp_calls = mcp_takvim.CALL_LOG.pop(run_id, [])
     calendar = []
     for c in mcp_calls:
@@ -191,4 +198,38 @@ async def analyze(
         "calendar": calendar,
         "cost_usd": round(sum(c.cost_usd for c in calls), 6),
         "persona": persona.id if persona else None,
+    }
+
+
+async def draft(run_id: str) -> dict:
+    """Write a reply/objection petition for an analysed letter."""
+    run = RUNS.get(run_id)
+    if not run:
+        raise KeyError(run_id)
+    persona = personas.BY_ID.get(run["persona"] or "")
+    callback = config.callback_base()
+    card = run["card"]
+    text, call = await otari.chat(
+        role="draft",
+        model=config.MODEL_ANALYST,
+        max_tokens=2500,
+        temperature=0.2,
+        conversation_id=run_id,
+        api_key=persona.api_key if persona else None,
+        metadata={"end_user": persona.id} if persona else None,
+        messages=[
+            {"role": "system", "content": prompts.DRAFT},
+            {"role": "user", "content": prompts.draft_input(run["masked_text"], card, card.get("reply_type"))
+             .replace("{today}", date.today().strftime("%d.%m.%Y"))},
+        ],
+        extra={"guardrails": guard.entries(callback, run_id, ("tr-pii",))} if callback else None,
+    )
+    if persona:
+        personas.record(persona.id, call.cost_usd)
+    guard.GUARD_LOG.pop(run_id, None)
+    return {
+        "run_id": run_id,
+        # Placeholders are filled with the person's data here, locally.
+        "draft": privacy.unmask(text.strip(), run["mapping"]),
+        "call": call.to_dict(),
     }

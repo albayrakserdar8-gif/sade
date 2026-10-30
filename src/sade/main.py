@@ -134,6 +134,18 @@ async def analyze(
         return JSONResponse(status_code=502 if e.status >= 500 else e.status, content=content)
 
 
+@app.post("/api/draft/{run_id}")
+async def draft(run_id: str):
+    try:
+        return await pipeline.draft(run_id)
+    except KeyError:
+        raise HTTPException(404, "Bu analiz bulunamadı; belgeyi yeniden yükleyin.") from None
+    except otari.OtariError as e:
+        detail = "Kullanım limitin doldu." if e.code == "budget_exceeded" else f"Yapay zekâ servisi hata verdi: {e.status}"
+        return JSONResponse(status_code=502 if e.status >= 500 else e.status,
+                            content={"detail": detail, "otari": {"status": e.status, "code": e.code}})
+
+
 # Otari-facing endpoints, under the secret prefix: MCP at /x/<secret>/mcp.
 if config.PUBLIC_SECRET:
     app.mount(f"/x/{config.PUBLIC_SECRET}", mcp_takvim.app)
