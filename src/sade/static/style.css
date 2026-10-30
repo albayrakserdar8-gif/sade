@@ -54,3 +54,33 @@ pre { white-space: pre-wrap; word-break: break-word; font-size: 13px; background
 .chip { font-size: 12px; padding: 3px 9px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); }
 .chip.ok { background: transparent; border: 1px solid var(--line); color: var(--muted); }
 .foot { max-width: 1200px; margin: 0 auto; padding: 8px 24px 32px; color: var(--muted); font-size: 13px; }
+.card-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.doc-type { font-size: 20px; font-weight: 700; }
+.issuer { color: var(--muted); }
+.urgency { font-size: 13px; padding: 4px 10px; border-radius: 99px; border: 1px solid var(--line); white-space: nowrap; }
+.urgency.high { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.urgency.mid { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+.summary { font-size: 16px; }
+.facts { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
+.facts div { border: 1px solid var(--line); border-radius: 9px; padding: 8px 12px; display: grid; }
+.facts span { font-size: 12px; color: var(--muted); }
+.actions { padding-left: 20px; }
+.action { margin-bottom: 14px; }
+.action-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+.action p { margin: 4px 0; }
+.deadline { font-weight: 600; }
+.left { font-size: 12px; padding: 2px 8px; border-radius: 99px; background: var(--bg); margin-left: 6px; }
+.left.soon { background: var(--accent-soft); color: var(--accent); }
+.left.past { background: var(--line); }
+.meta { font-size: 13px; color: var(--muted); }
+.consequence { font-size: 14px; color: var(--warn); }
+.warnings { background: var(--warn-soft); color: var(--warn); border-radius: 9px; padding: 10px 14px; margin: 10px 0; }
+.warnings ul { margin: 6px 0 0; padding-left: 18px; }
+.calls { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+.calls th, .calls td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.calls th { color: var(--muted); font-weight: 600; }
+.calls tfoot td { font-weight: 700; }
+.calls code { font-size: 12px; }
+.calls .sub td { background: var(--bg); }
+pre.out { border-left: 3px solid var(--ok); }
+@media (max-width: 860px) { .calls { display: block; overflow-x: auto; } }

@@ -9,7 +9,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import dates, extract, privacy
+from . import extract, otari, pipeline
 
 ROOT = Path(__file__).resolve().parents[2]
 STATIC = Path(__file__).parent / "static"
@@ -61,14 +61,10 @@ async def analyze(file: UploadFile = File(...)) -> dict:
     if not text:
         raise HTTPException(422, "Belgeden metin çıkarılamadı.")
 
-    masked = privacy.mask(text)
-    return {
-        "kind": kind,
-        "masked_text": masked.text,
-        "pii": masked.counts,
-        "dates": [{k: v for k, v in d.items() if k != "pos"} for d in dates.find_dates(masked.text)],
-        "card": None,
-    }
+    try:
+        return await pipeline.analyze_text(text)
+    except otari.OtariError as e:
+        raise HTTPException(502, f"Yapay zekâ servisi hata verdi: {e.status} {e.code or ''}") from e
 
 
 def run() -> None:

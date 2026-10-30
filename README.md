@@ -13,9 +13,17 @@ licence plates, names and addresses) is masked before any text leaves the app.
 
 > Status: work in progress for MozFest *Developers Wilding: Online*.
 
+## How it uses Otari
+
+Every AI call goes through the [Otari](https://otari.ai) gateway to open-weight
+models. `src/sade/otari.py` is a thin HTTP client that also reads Otari's
+routing headers and per-request cost, so the UI can show which model answered
+and what it cost.
+
 ## Run it
 
 ```bash
+cp .env.example .env                     # add your Otari API key
 uv sync
 uv run python scripts/make_samples.py   # fake sample letters into samples/
 uv run sade                              # http://127.0.0.1:8000
