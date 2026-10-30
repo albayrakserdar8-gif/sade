@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sade — resmi yazıları sadeleştir</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand"><span class="logo">S</span> Sade</div>
+    <p class="tagline">Resmi yazını yükle; ne istendiğini, son tarihi ve ne yapman gerektiğini sade Türkçeyle söyleyelim.</p>
+  </header>
+
+  <main class="layout">
+    <section class="panel input">
+      <h2>1. Belgeni yükle</h2>
+      <label class="drop" id="drop">
+        <input type="file" id="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.txt" hidden>
+        <strong>PDF veya fotoğraf seç</strong>
+        <span>ya da buraya sürükle</span>
+      </label>
+      <h3>veya örnek bir belge dene</h3>
+      <div id="samples" class="samples"></div>
+      <p class="note">Örnek belgelerdeki kişiler ve numaralar uydurmadır.</p>
+    </section>
+
+    <section class="panel output">
+      <div id="status" class="status hidden"></div>
+      <div id="empty" class="empty">Sonuç burada görünecek.</div>
+      <div id="result" class="hidden">
+        <div id="card"></div>
+        <details class="block" open>
+          <summary>Modele giden metin (kişisel veriler maskeli)</summary>
+          <div id="pii" class="chips"></div>
+          <pre id="masked"></pre>
+        </details>
+        <details class="block">
+          <summary>Belgede bulunan tarihler</summary>
+          <ul id="dates"></ul>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">Sade hukuki tavsiye vermez. Önemli kararlar için avukata veya ilgili kuruma danışın.</footer>
+  <script src="/static/app.js"></script>
+</body>
+</html>

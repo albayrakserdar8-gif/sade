@@ -1,0 +1,30 @@
+# Sade
+
+**Plain-language help with Turkish official letters.**
+
+Tax notices, enforcement orders, landlord notices and e-Devlet notifications are
+written in dense legal Turkish. People miss deadlines (objection periods, payment
+windows) and lose money or rights because of it. Sade reads such a letter (PDF or
+phone photo) and tells you, in plain Turkish, what it is, what you need to do and
+by when, and drafts a reply if one is needed.
+
+Personal data (national ID numbers, IBANs, phone numbers, e-mail addresses,
+licence plates, names and addresses) is masked before any text leaves the app.
+
+> Status: work in progress for MozFest *Developers Wilding: Online*.
+
+## Run it
+
+```bash
+uv sync
+uv run python scripts/make_samples.py   # fake sample letters into samples/
+uv run sade                              # http://127.0.0.1:8000
+uv run pytest
+```
+
+The sample letters are invented: every person, number and address in them is fake.
+
+## Disclaimer
+
+Sade does not give legal advice. For important decisions, talk to a lawyer or
+the issuing office.
