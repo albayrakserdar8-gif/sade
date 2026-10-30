@@ -49,3 +49,9 @@ Friction and wins noted while building, for the final feedback submission.
   OpenAI shape) silently made the sandbox persist after the request
   (`Otari-Container-Expires-At` ~20 min later). Easy to miss that this holds a
   billed sandbox; the docs explain it, but the OpenAI default shape triggers it.
+- **Non-streamed requests die at ~30 s with a CloudFront 504 HTML page.** A
+  vision request (Qwen3-VL-235B, ~250 KB image) took ~50 s; without
+  `stream: true` the client got `504 Gateway Timeout` HTML from CloudFront,
+  not a JSON error, and no `Otari-Request-ID`. Streaming the same request
+  works. Tool loops (code + search + MCP) easily pass 30 s, so on hosted every
+  client effectively has to stream. Worth documenting, or raising the edge timeout.

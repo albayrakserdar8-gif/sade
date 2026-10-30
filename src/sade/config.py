@@ -15,3 +15,5 @@ OTARI_API_KEY = os.getenv("OTARI_API_KEY", "")
 
 # Every model is open-weight and reached through Otari.
 MODEL_ANALYST = os.getenv("SADE_MODEL_ANALYST", "deepseek/deepseek-v4.1-flash-1017")
+MODEL_OCR = os.getenv("SADE_MODEL_OCR", "deepseek/deepseek-v4.1-flash-1017")
+MODEL_CLASSIFIER = os.getenv("SADE_MODEL_CLASSIFIER", "mistralai/ministral-3-8b")

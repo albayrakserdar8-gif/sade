@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import extract, otari, pipeline
@@ -50,21 +50,27 @@ async def analyze(file: UploadFile = File(...)) -> dict:
     if len(data) > 15 * 1024 * 1024:
         raise HTTPException(413, "Dosya 15 MB'tan büyük olamaz.")
     kind = extract.kind_of(file.filename or "", file.content_type)
+    text = image_uri = None
     if kind == "pdf":
         text = extract.pdf_text(data)
+        if not text:
+            raise HTTPException(422, "PDF'de metin yok (taranmış olabilir). Sayfanın fotoğrafını yükleyin.")
     elif kind == "text":
         text = data.decode("utf-8", errors="replace")
     elif kind == "image":
-        raise HTTPException(501, "Fotoğraftan metin okuma (OCR) henüz bağlı değil.")
+        image_uri = extract.image_data_uri(data, max_side=1400, quality=80)
     else:
         raise HTTPException(415, "PDF, fotoğraf veya metin dosyası yükleyin.")
-    if not text:
-        raise HTTPException(422, "Belgeden metin çıkarılamadı.")
 
     try:
-        return await pipeline.analyze_text(text)
+        return await pipeline.analyze(text=text, image_uri=image_uri)
     except otari.OtariError as e:
-        raise HTTPException(502, f"Yapay zekâ servisi hata verdi: {e.status} {e.code or ''}") from e
+        return JSONResponse(
+            status_code=502 if e.status >= 500 else e.status,
+            content={"detail": f"Yapay zekâ servisi hata verdi: {e.status} {e.code or ''}".strip(),
+                     "otari": {"status": e.status, "code": e.code, "detail": e.detail},
+                     "calls": getattr(e, "calls", [])},
+        )
 
 
 def run() -> None:

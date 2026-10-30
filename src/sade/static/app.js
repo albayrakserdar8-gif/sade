@@ -102,7 +102,7 @@ const ROLE_LABELS = { analyze: "Analiz", ocr: "Görüntüden metin", classify: "
 function renderCalls(calls, total) {
   const rows = calls.map((c) => `
     <tr>
-      <td>${esc(ROLE_LABELS[c.role] || c.role)}</td>
+      <td>${esc(ROLE_LABELS[c.role] || c.role)}${c.error ? ` <span class="chip">${esc(c.error)}</span>` : ""}</td>
       <td><code>${esc(c.model_requested)}</code>${c.model_served && c.model_served !== c.model_requested ? `<br><small>→ ${esc(c.model_served)}</small>` : ""}</td>
       <td>${esc(c.provider || "")}${c.fallback ? ' <span class="chip">fallback</span>' : ""}</td>
       <td>${c.duration_ms ? (c.duration_ms / 1000).toFixed(1) + " sn" : ""}</td>
