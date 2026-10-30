@@ -107,3 +107,19 @@ Friction and wins noted while building, for the final feedback submission.
 - Guardrail `input_text` is only the latest user message. Fine for us (the
   letter is the user message), but surprising if the risky content is in a
   system prompt or earlier turn.
+- **Per-user budgets for an app's own users on hosted: one key per user.**
+  No service keys for tenants, so each demo user got an API key with its own
+  budget (dashboard: Create key → Budget). Enforcement works: once over
+  budget, the next request is `403 budget_exceeded` with
+  `Otari-Budget-Scope: api_token` and `Retry-After`. But this does not scale
+  to real end users (a key per user, created by hand, all billed to me).
+- **Budget holds ignore tool costs, so caps overshoot.** A key with a $0.05
+  daily cap ran three analyses ($0.021 + $0.021 + $0.041 = $0.083) before the
+  fourth was refused. The pre-dispatch hold only prices output tokens; the
+  sandbox and web-search charges (most of the bill) land afterwards.
+- API keys list shows **Budget: None** for keys that do have a budget (their
+  ceilings show correctly under Spend & budgets).
+- Spend ceilings on keys are listed as "An API key (4a6a2e43…)" — the key's
+  name isn't shown, so with several keys you can't tell which is which.
+- An API key cannot read its own remaining budget, so the app keeps its own
+  tally from `usage.cost_usd` to show users how much they have left.

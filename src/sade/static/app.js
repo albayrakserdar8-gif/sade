@@ -22,6 +22,7 @@ async function analyze(file) {
   $("result").classList.add("hidden");
   const form = new FormData();
   form.append("file", file);
+  form.append("persona", currentPersona);
   form.append("simulate_outage", $("outage").checked);
   form.append("skip_masking", $("nomask").checked);
   try {
@@ -29,10 +30,12 @@ async function analyze(file) {
     const body = await res.json();
     if (!res.ok) {
       if (body.calls?.length || body.guardrails?.length) renderBlocked(body);
+      loadPersonas();
       throw new Error(body.detail || res.statusText);
     }
     render(body);
     setStatus("");
+    loadPersonas();
   } catch (err) {
     setStatus(err.message, true);
     if ($("result").classList.contains("hidden")) $("empty").classList.remove("hidden");
@@ -131,7 +134,10 @@ function renderCalls(calls, total) {
 }
 
 function renderBlocked(b) {
-  $("card").innerHTML = '<div class="blocked"><strong>Analiz durduruldu</strong><p>Belge yapay zekâ modeline gönderilmedi.</p></div>';
+  const why = b.otari?.code === "budget_exceeded"
+    ? "Bu kullanıcının Otari bütçesi doldu; istek modele ulaşmadan reddedildi."
+    : "Belge yapay zekâ modeline gönderilmedi.";
+  $("card").innerHTML = `<div class="blocked"><strong>Analiz durduruldu</strong><p>${esc(why)}</p></div>`;
   const total = (b.calls || []).reduce((n, c) => n + Number(c.cost_usd || 0), 0);
   $("otari").innerHTML = renderCalls(b.calls || [], total) + renderGuardrails(b.guardrails);
   $("pii").innerHTML = ""; $("masked").textContent = ""; $("dates").innerHTML = "";
@@ -177,6 +183,27 @@ async function loadSamples() {
     analyze(new File([blob], s.file, { type: blob.type }));
   }));
 }
+
+let currentPersona = "ayse";
+try { currentPersona = localStorage.getItem("sade-persona") || "ayse"; } catch {}
+
+async function loadPersonas() {
+  const list = await (await fetch("/api/personas")).json();
+  $("personas").innerHTML = list.map((p) => {
+    const pct = Math.min(100, (p.spent_usd / p.limit_usd) * 100);
+    return `<button class="persona ${p.id === currentPersona ? "on" : ""}" data-id="${esc(p.id)}" ${p.configured ? "" : "disabled"}>
+      <strong>${esc(p.name)}</strong><small>${esc(p.note)}</small>
+      <span class="meter"><span style="width:${pct.toFixed(0)}%"></span></span>
+      <small>$${p.spent_usd.toFixed(4)} / $${p.limit_usd.toFixed(2)} ${p.period === "daily" ? "bugün" : "bu ay"}</small>
+    </button>`;
+  }).join("");
+  $("personas").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+    currentPersona = b.dataset.id;
+    try { localStorage.setItem("sade-persona", currentPersona); } catch {}
+    loadPersonas();
+  }));
+}
+loadPersonas();
 
 $("file").addEventListener("change", (e) => e.target.files[0] && analyze(e.target.files[0]));
 const drop = $("drop");

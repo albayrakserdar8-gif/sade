@@ -13,7 +13,7 @@ from __future__ import annotations
 import uuid
 from datetime import date
 
-from . import config, dates, guard, mcp_takvim, otari, privacy, prompts
+from . import config, dates, guard, mcp_takvim, otari, personas, privacy, prompts
 
 
 def _guard_calls(run_id: str) -> list[dict]:
@@ -28,9 +28,12 @@ def new_run_id() -> str:
     return f"sade-{uuid.uuid4().hex[:12]}"
 
 
-async def ocr(image_uri: str, *, run_id: str) -> tuple[str, otari.Call]:
+async def ocr(image_uri: str, *, run_id: str, api_key: str | None = None,
+              metadata: dict | None = None) -> tuple[str, otari.Call]:
     return await otari.chat(
         role="ocr",
+        api_key=api_key,
+        metadata=metadata,
         model=config.MODEL_OCR,
         max_tokens=2500,
         conversation_id=run_id,
@@ -44,12 +47,15 @@ async def ocr(image_uri: str, *, run_id: str) -> tuple[str, otari.Call]:
     )
 
 
-async def classify(masked_text: str, *, run_id: str) -> tuple[dict, otari.Call]:
+async def classify(masked_text: str, *, run_id: str, api_key: str | None = None,
+                   metadata: dict | None = None) -> tuple[dict, otari.Call]:
     # This is the first call that sends the letter's text to a model, so the
     # full guardrails run here: nothing reaches any model if they fail.
     callback = config.callback_base()
     text, call = await otari.chat(
         role="classify",
+        api_key=api_key,
+        metadata=metadata,
         model=config.MODEL_CLASSIFIER,
         max_tokens=200,
         conversation_id=run_id,
@@ -68,20 +74,25 @@ async def classify(masked_text: str, *, run_id: str) -> tuple[dict, otari.Call]:
 
 async def analyze(
     *, text: str | None = None, image_uri: str | None = None, run_id: str | None = None,
-    simulate_outage: bool = False, skip_masking: bool = False,
+    simulate_outage: bool = False, skip_masking: bool = False, persona_id: str | None = None,
 ) -> dict:
     run_id = run_id or new_run_id()
     calls: list[otari.Call] = []
+    # Each demo user calls Otari with their own key, which carries their own
+    # budget; Otari refuses with 403 budget_exceeded when it is spent.
+    persona = personas.BY_ID.get(persona_id or "")
+    api_key = persona.api_key if persona else None
+    who = {"end_user": persona.id} if persona else {}
     try:
         if image_uri:
-            text, call = await ocr(image_uri, run_id=run_id)
+            text, call = await ocr(image_uri, run_id=run_id, api_key=api_key, metadata=who)
             calls.append(call)
         assert text is not None
 
         # skip_masking exists only to demonstrate the tr-pii guardrail.
         masked = privacy.MaskResult(text=text) if skip_masking else privacy.mask(text)
 
-        doc_class, call = await classify(masked.text, run_id=run_id)
+        doc_class, call = await classify(masked.text, run_id=run_id, api_key=api_key, metadata=who)
         calls.append(call)
 
         today = date.today()
@@ -133,7 +144,8 @@ async def analyze(
                 **({"guardrails": guard.entries(callback, run_id, ("tr-pii",))} if callback else {}),
             },
             conversation_id=run_id,
-            metadata={"doc_type": doc_class["doc_type"]},
+            api_key=api_key,
+            metadata={"doc_type": doc_class["doc_type"], **who},
         )
         calls.append(call)
         card = otari.output_json(data)
@@ -143,10 +155,14 @@ async def analyze(
     except otari.OtariError as e:
         if e.call:
             calls.append(e.call)
+        if persona:
+            personas.record(persona.id, sum(c.cost_usd for c in calls))
         e.calls = [c.to_dict() for c in calls] + _guard_calls(run_id)  # type: ignore[attr-defined]
         e.guardrails = _guard_verdicts(run_id)  # type: ignore[attr-defined]
         raise
 
+    if persona:
+        personas.record(persona.id, sum(c.cost_usd for c in calls))
     mcp_calls = mcp_takvim.CALL_LOG.pop(run_id, [])
     calendar = []
     for c in mcp_calls:
@@ -174,4 +190,5 @@ async def analyze(
         "mcp": {"connected": bool(mcp_servers), "calls": mcp_calls},
         "calendar": calendar,
         "cost_usd": round(sum(c.cost_usd for c in calls), 6),
+        "persona": persona.id if persona else None,
     }

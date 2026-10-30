@@ -11,7 +11,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import config, extract, guard, mcp_takvim, otari, pipeline
+from . import config, extract, guard, mcp_takvim, otari, personas, pipeline
 
 ROOT = Path(__file__).resolve().parents[2]
 STATIC = Path(__file__).parent / "static"
@@ -85,9 +85,15 @@ def samples() -> list[dict]:
     return out
 
 
+@app.get("/api/personas")
+def persona_list() -> list[dict]:
+    return personas.listing()
+
+
 @app.post("/api/analyze")
 async def analyze(
     file: UploadFile = File(...), simulate_outage: bool = Form(False), skip_masking: bool = Form(False),
+    persona: str = Form("ayse"),
 ):
     data = await file.read()
     if len(data) > 15 * 1024 * 1024:
@@ -108,6 +114,7 @@ async def analyze(
     try:
         return await pipeline.analyze(
             text=text, image_uri=image_uri, simulate_outage=simulate_outage, skip_masking=skip_masking,
+            persona_id=persona,
         )
     except otari.OtariError as e:
         content = {
@@ -116,6 +123,11 @@ async def analyze(
             "calls": getattr(e, "calls", []),
             "guardrails": getattr(e, "guardrails", []),
         }
+        if e.code == "budget_exceeded":
+            scope = e.headers.get("otari-budget-scope", "")
+            content["detail"] = ("Kullanım limitin doldu: Otari bu kullanıcının bütçesini aştığı için isteği "
+                                 f"reddetti (kapsam: {scope or 'bilinmiyor'}). {e.detail if isinstance(e.detail, str) else ''}")
+            content["budget"] = {"scope": scope, "retry_after": e.headers.get("retry-after")}
         if e.code == "guardrail_violation":
             reasons = [g.get("explanation") for g in (e.detail.get("guardrails") or []) if g.get("explanation")]
             content["detail"] = "Otari guardrail'i isteği durdurdu, belge modele gönderilmedi. " + " ".join(reasons)
