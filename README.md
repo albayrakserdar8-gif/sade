@@ -144,6 +144,10 @@ Expected deadlines, which the tests also check:
 
 What worked, what didn't, with reproduction steps: [FEEDBACK.md](FEEDBACK.md).
 
+## License
+
+[Apache-2.0](LICENSE), the same license as Otari.
+
 ## Disclaimer
 
 Sade does not give legal advice. For important decisions, talk to a lawyer or
