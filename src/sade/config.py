@@ -24,6 +24,19 @@ OTARI_API_KEY = os.getenv("OTARI_API_KEY", "")
 MODEL_ANALYST = os.getenv("SADE_MODEL_ANALYST", "sade-analyst")
 MODEL_ANALYST_OUTAGE = os.getenv("SADE_MODEL_ANALYST_OUTAGE", "sade-analyst-demo")
 MODEL_OCR = os.getenv("SADE_MODEL_OCR", "sade-ocr")
+
+# Policy-level fallbacks done by the app (see otari.py). Hosted Otari does not
+# fall back to a policy's next candidate on streamed requests that declare
+# gateway-run tools, so when such a request fails before any output, the app
+# sends it to the next policy here. All of them are Otari routing policies:
+#   sade-analyst-backup  DeepSeek V4.1 Flash 1017 on Fireworks -> on Nebius
+#                        -> Qwen3 235B (different providers from sade-analyst)
+POLICY_FALLBACKS: dict[str, list[str]] = {
+    "sade-analyst-demo": ["sade-analyst"],
+    "sade-analyst": ["sade-analyst-backup"],
+}
+if os.getenv("SADE_POLICY_FALLBACKS") == "off":
+    POLICY_FALLBACKS = {}
 MODEL_CLASSIFIER = os.getenv("SADE_MODEL_CLASSIFIER", "mistralai/ministral-3-8b")
 
 # Otari calls back into this app (our MCP server and guardrail service)

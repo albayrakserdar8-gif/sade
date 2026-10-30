@@ -8,6 +8,15 @@ servers, guardrails, request tags and per-request cost.
 Requests are always streamed: the hosted gateway sits behind an edge that
 cuts non-streamed responses after ~30 s, and tool loops (code, web search,
 MCP) or OCR on a large image take longer than that.
+
+Fallback across policies (a workaround). Otari routing policies fall back
+to their next candidate when a provider fails. On hosted Otari that does
+not happen for streamed requests that declare gateway-run tools (code
+execution, web search, MCP): the first candidate's failure arrives as an
+SSE error event before any output (see FEEDBACK.md and the Otari issue).
+So when a request fails *before any output* with a provider error, we send
+the same request to the next Otari policy in `fallback_models`. Model
+choice still lives in Otari's policies; we only do the hop Otari skipped.
 """
 
 from __future__ import annotations
@@ -15,18 +24,41 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import asdict, dataclass, field
-from typing import Any, AsyncIterator
+from typing import Any, AsyncIterator, Awaitable, Callable, TypeVar
 
 import httpx
 
 from . import config
 
+# Provider failures that are safe to retry on another policy, as long as no
+# output has been streamed yet.
+RETRYABLE_BEFORE_OUTPUT = {
+    "provider_credential_rejected",
+    "provider_error",
+    "provider_not_configured",
+    "upstream_rate_limited",
+    "provider_stream_interrupted",
+    "provider_timeout",
+}
+
+# Tests inject an httpx.MockTransport here.
+TRANSPORT: httpx.AsyncBaseTransport | None = None
+
 
 class OtariError(Exception):
-    def __init__(self, status: int, code: str | None, detail: Any, headers: dict[str, str]):
+    def __init__(self, status: int, code: str | None, detail: Any, headers: dict[str, str],
+                 before_output: bool = False):
         self.status, self.code, self.detail, self.headers = status, code, detail, headers
+        self.before_output = before_output
         self.call: Call | None = None
         super().__init__(f"Otari {status} {code or ''}: {detail}")
+
+    @property
+    def retryable(self) -> bool:
+        """Failed before any output, for a reason another policy may not share."""
+        if not self.before_output:
+            return False
+        return self.code in RETRYABLE_BEFORE_OUTPUT or self.status >= 500 or self.status == 424
 
 
 @dataclass
@@ -46,6 +78,9 @@ class Call:
     error: str | None = None
     code_runs: list[dict] = field(default_factory=list)
     web_calls: list[dict] = field(default_factory=list)
+    # Set when the app had to retry on the next policy (the workaround above).
+    client_fallback: bool = False
+    failed_attempts: list[dict] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -82,13 +117,39 @@ async def _error_from(resp: httpx.Response) -> OtariError:
     code = (body.get("code") if isinstance(body, dict) else None) or (
         detail.get("code") if isinstance(detail, dict) else None
     )
-    return OtariError(resp.status_code, code or resp.headers.get("otari-error-code"), detail, dict(resp.headers))
+    # Nothing was streamed, so any HTTP error is "before output".
+    return OtariError(resp.status_code, code or resp.headers.get("otari-error-code"), detail,
+                      dict(resp.headers), before_output=True)
+
+
+def _is_error_event(event: dict) -> bool:
+    return event.get("type") in ("error", "response.failed") or ("error" in event and not event.get("choices"))
+
+
+def _error_code(event: dict) -> str:
+    err = event.get("error") or (event.get("response") or {}).get("error") or {}
+    return (err.get("code") if isinstance(err, dict) else None) or "stream_error"
+
+
+def _carries_output(event: dict) -> bool:
+    """Has anything reached the client that a retry would duplicate?"""
+    if event.get("type") in ("response.created", "response.in_progress"):
+        return False
+    if "choices" in event:  # chat chunk
+        if event.get("otari_tool_calls"):
+            return True
+        for choice in event["choices"] or []:
+            delta = choice.get("delta") or {}
+            if delta.get("content") or delta.get("tool_calls"):
+                return True
+        return False
+    return True
 
 
 async def _stream(path: str, body: dict, call: Call, headers: dict) -> AsyncIterator[dict]:
     """POST and yield each SSE `data:` JSON object."""
     started = time.monotonic()
-    async with httpx.AsyncClient(timeout=httpx.Timeout(300, connect=15)) as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(300, connect=15), transport=TRANSPORT) as client:
         async with client.stream("POST", f"{config.OTARI_API_BASE}/api/v1/{path}", headers=headers, json=body) as resp:
             _fill_from_headers(call, resp.headers)
             if resp.status_code >= 400:
@@ -97,20 +158,58 @@ async def _stream(path: str, body: dict, call: Call, headers: dict) -> AsyncIter
                 call.duration_ms = int((time.monotonic() - started) * 1000)
                 err.call = call
                 raise err
+            seen_output = False
             async for line in resp.aiter_lines():
                 if not line.startswith("data:"):
-                    continue
+                    continue  # `event:` lines and `: keepalive` comments
                 data = line[5:].strip()
                 if not data or data == "[DONE]":
                     continue
                 event = json.loads(data)
-                if event.get("type") in ("error", "response.failed") or "error" in event and not event.get("choices"):
-                    err = OtariError(502, "stream_error", event.get("error") or event, dict(resp.headers))
-                    call.error = "stream error"
+                if _is_error_event(event):
+                    code = _error_code(event)
+                    err = OtariError(502, code, event.get("error") or event, dict(resp.headers),
+                                     before_output=not seen_output)
+                    call.error = code
+                    call.duration_ms = int((time.monotonic() - started) * 1000)
                     err.call = call
                     raise err
+                seen_output = seen_output or _carries_output(event)
                 yield event
     call.duration_ms = int((time.monotonic() - started) * 1000)
+
+
+T = TypeVar("T")
+
+
+async def _with_policy_fallbacks(
+    models: list[str], attempt: Callable[[str], Awaitable[tuple[T, Call]]]
+) -> tuple[T, Call]:
+    """Try each policy in turn while failures happen before any output."""
+    failed: list[dict] = []
+    for i, model in enumerate(models):
+        try:
+            result, call = await attempt(model)
+        except OtariError as e:
+            if e.call:
+                e.call.failed_attempts = failed + e.call.failed_attempts
+            if i + 1 < len(models) and e.retryable:
+                c = e.call
+                failed.append({
+                    "model": model,
+                    "served": c.model_served if c else None,
+                    "provider": c.provider if c else None,
+                    "code": e.code,
+                    "status": e.status,
+                    "request_id": c.request_id if c else None,
+                    "duration_ms": c.duration_ms if c else None,
+                })
+                continue
+            raise
+        call.client_fallback = i > 0
+        call.failed_attempts = failed
+        return result, call
+    raise AssertionError("unreachable")
 
 
 async def responses(
@@ -127,44 +226,49 @@ async def responses(
     api_key: str | None = None,
     headers: dict | None = None,
     extra: dict | None = None,
+    fallback_models: list[str] | None = None,
 ) -> tuple[dict, Call]:
     """POST /api/v1/responses (streamed). Returns (final response object, Call)."""
-    body: dict[str, Any] = {
-        "model": model, "input": input, "max_output_tokens": max_output_tokens, "stream": True,
-        "metadata": {"app": "sade", "role": role, **(metadata or {})},
-    }
-    if instructions:
-        body["instructions"] = instructions
-    if text_format:
-        body["text"] = {"format": text_format}
-    if tools:
-        body["tools"] = tools
-    body.update(extra or {})
 
-    call = Call(role=role, model_requested=model)
-    final: dict | None = None
-    async for event in _stream("responses", body, call, _headers(api_key, conversation_id, headers)):
-        if event.get("type") == "response.completed":
-            final = event.get("response")
-    if final is None:
-        raise OtariError(502, "incomplete_stream", "stream ended without response.completed", {})
+    async def once(m: str) -> tuple[dict, Call]:
+        body: dict[str, Any] = {
+            "model": m, "input": input, "max_output_tokens": max_output_tokens, "stream": True,
+            "metadata": {"app": "sade", "role": role, **(metadata or {})},
+        }
+        if instructions:
+            body["instructions"] = instructions
+        if text_format:
+            body["text"] = {"format": text_format}
+        if tools:
+            body["tools"] = tools
+        body.update(extra or {})
 
-    usage = final.get("usage") or {}
-    call.cost_usd = float(usage.get("cost_usd") or 0)
-    call.tokens = usage.get("total_tokens")
-    for item in final.get("output", []):
-        if item.get("type") == "code_interpreter_call":
-            logs = "".join(o.get("logs", "") for o in item.get("outputs") or [] if o.get("type") == "logs")
-            call.code_runs.append({"code": item.get("code", ""), "output": logs})
-        elif item.get("type") == "web_search_call":
-            action = item.get("action") or {}
-            call.web_calls.append({
-                "type": "web_fetch" if action.get("type") in ("open_page", "fetch") else "web_search",
-                "status": item.get("status"),
-                "query": action.get("query"),
-                "url": action.get("url"),
-            })
-    return final, call
+        call = Call(role=role, model_requested=m)
+        final: dict | None = None
+        async for event in _stream("responses", body, call, _headers(api_key, conversation_id, headers)):
+            if event.get("type") == "response.completed":
+                final = event.get("response")
+        if final is None:
+            raise OtariError(502, "incomplete_stream", "stream ended without response.completed", {})
+
+        usage = final.get("usage") or {}
+        call.cost_usd = float(usage.get("cost_usd") or 0)
+        call.tokens = usage.get("total_tokens")
+        for item in final.get("output", []):
+            if item.get("type") == "code_interpreter_call":
+                logs = "".join(o.get("logs", "") for o in item.get("outputs") or [] if o.get("type") == "logs")
+                call.code_runs.append({"code": item.get("code", ""), "output": logs})
+            elif item.get("type") == "web_search_call":
+                action = item.get("action") or {}
+                call.web_calls.append({
+                    "type": "web_fetch" if action.get("type") in ("open_page", "fetch") else "web_search",
+                    "status": item.get("status"),
+                    "query": action.get("query"),
+                    "url": action.get("url"),
+                })
+        return final, call
+
+    return await _with_policy_fallbacks([model, *(fallback_models or [])], once)
 
 
 async def chat(
@@ -181,34 +285,39 @@ async def chat(
     api_key: str | None = None,
     headers: dict | None = None,
     extra: dict | None = None,
+    fallback_models: list[str] | None = None,
 ) -> tuple[str, Call]:
     """POST /api/v1/chat/completions (streamed). Returns (assistant text, Call)."""
-    body: dict[str, Any] = {
-        "model": model, "messages": messages, "max_tokens": max_tokens, "stream": True,
-        "stream_options": {"include_usage": True},
-        "metadata": {"app": "sade", "role": role, **(metadata or {})},
-    }
-    if temperature is not None:
-        body["temperature"] = temperature
-    if response_format:
-        body["response_format"] = response_format
-    if tools:
-        body["tools"] = tools
-    body.update(extra or {})
 
-    call = Call(role=role, model_requested=model)
-    parts: list[str] = []
-    web: dict[str, dict] = {}
-    async for event in _stream("chat/completions", body, call, _headers(api_key, conversation_id, headers)):
-        for choice in event.get("choices") or []:
-            parts.append((choice.get("delta") or {}).get("content") or "")
-        for tc in event.get("otari_tool_calls") or []:
-            web[tc["id"]] = tc  # the ended entry replaces the started one
-        if event.get("usage"):
-            call.cost_usd = float(event["usage"].get("cost_usd") or 0)
-            call.tokens = event["usage"].get("total_tokens")
-    call.web_calls = list(web.values())
-    return "".join(parts), call
+    async def once(m: str) -> tuple[str, Call]:
+        body: dict[str, Any] = {
+            "model": m, "messages": messages, "max_tokens": max_tokens, "stream": True,
+            "stream_options": {"include_usage": True},
+            "metadata": {"app": "sade", "role": role, **(metadata or {})},
+        }
+        if temperature is not None:
+            body["temperature"] = temperature
+        if response_format:
+            body["response_format"] = response_format
+        if tools:
+            body["tools"] = tools
+        body.update(extra or {})
+
+        call = Call(role=role, model_requested=m)
+        parts: list[str] = []
+        web: dict[str, dict] = {}
+        async for event in _stream("chat/completions", body, call, _headers(api_key, conversation_id, headers)):
+            for choice in event.get("choices") or []:
+                parts.append((choice.get("delta") or {}).get("content") or "")
+            for tc in event.get("otari_tool_calls") or []:
+                web[tc["id"]] = tc  # the ended entry replaces the started one
+            if event.get("usage"):
+                call.cost_usd = float(event["usage"].get("cost_usd") or 0)
+                call.tokens = event["usage"].get("total_tokens")
+        call.web_calls = list(web.values())
+        return "".join(parts), call
+
+    return await _with_policy_fallbacks([model, *(fallback_models or [])], once)
 
 
 def output_text(data: dict) -> str:

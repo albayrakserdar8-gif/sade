@@ -90,9 +90,6 @@ async def analyze(
     who = {"end_user": persona.id} if persona else {}
     try:
         if image_uri:
-            # The outage demo runs on the tool-free calls (OCR, draft): with
-            # streaming plus gateway-run tools, Otari does not fall back (see
-            # FEEDBACK.md), so the analysis call always uses sade-analyst.
             text, call = await ocr(image_uri, run_id=run_id, api_key=api_key, metadata=who,
                                    model=config.MODEL_ANALYST_OUTAGE if simulate_outage else None)
             calls.append(call)
@@ -130,9 +127,13 @@ async def analyze(
             label = prompts.DOC_TYPES[doc_class["doc_type"]]
             instructions += f"\nBelge türü ön sınıflandırması: {label}. Hatırlatma: {hint}\n"
 
+        analyst_model = config.MODEL_ANALYST_OUTAGE if simulate_outage else config.MODEL_ANALYST
         data, call = await otari.responses(
             role="analyze",
-            model=config.MODEL_ANALYST,
+            model=analyst_model,
+            # If Otari cannot fall back inside the policy (streamed tool loop),
+            # the app moves to the next policy.
+            fallback_models=config.POLICY_FALLBACKS.get(analyst_model),
             instructions=instructions,
             input=prompts.analyst_input(masked.text),
             text_format=prompts.CARD_SCHEMA,

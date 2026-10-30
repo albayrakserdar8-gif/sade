@@ -107,3 +107,5 @@ pre.out { border-left: 3px solid var(--ok); }
 .row { display: flex; gap: 8px; margin-top: 8px; }
 textarea { width: 100%; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 12px; border-radius: 9px;
   border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+.calls tr.failed td { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--accent); }
+.calls tr.failed td .chip, .calls tr.failed td small { text-decoration: none; }

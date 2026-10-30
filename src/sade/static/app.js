@@ -151,10 +151,18 @@ const ROLE_LABELS = { analyze: "Analiz", ocr: "Görüntüden metin", classify: "
 
 function renderCalls(calls, total) {
   const rows = calls.map((c) => `
+    ${(c.failed_attempts || []).map((f) => `
+    <tr class="failed">
+      <td>${esc(ROLE_LABELS[c.role] || c.role)} <span class="chip">${esc(f.code || f.status)}</span></td>
+      <td><code>${esc(f.model)}</code>${f.served ? `<br><small>→ ${esc(f.served)}</small>` : ""}</td>
+      <td>${esc(f.provider || "")}</td>
+      <td>${f.duration_ms ? (f.duration_ms / 1000).toFixed(1) + " sn" : ""}</td>
+      <td>—</td>
+    </tr>`).join("")}
     <tr>
       <td>${esc(ROLE_LABELS[c.role] || c.role)}${c.error ? ` <span class="chip">${esc(c.error)}</span>` : ""}</td>
       <td><code>${esc(c.model_requested)}</code>${c.model_served && c.model_served !== c.model_requested ? `<br><small>→ ${esc(c.model_served)}</small>` : ""}</td>
-      <td>${esc(c.provider || "")}${c.fallback ? ` <span class="chip">fallback · ${esc(c.attempts)}. deneme</span>` : ""}</td>
+      <td>${esc(c.provider || "")}${c.fallback ? ` <span class="chip">Otari fallback · ${esc(c.attempts)}. deneme</span>` : ""}${c.client_fallback ? ' <span class="chip" title="Otari, araçlı stream isteklerde policy içinde yedeğe geçmiyor (bildirdik); uygulama sonraki policy\'yi denedi.">uygulama yedeği → sonraki policy</span>' : ""}</td>
       <td>${c.duration_ms ? (c.duration_ms / 1000).toFixed(1) + " sn" : ""}</td>
       <td>$${Number(c.cost_usd || 0).toFixed(4)}</td>
     </tr>
