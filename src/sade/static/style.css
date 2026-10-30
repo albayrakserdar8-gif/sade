@@ -91,3 +91,5 @@ pre.out { border-left: 3px solid var(--ok); }
 .cal { font-size: 12px; margin-left: 6px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--line);
   color: var(--text); text-decoration: none; white-space: nowrap; }
 .cal:hover { border-color: var(--accent); }
+.blocked { background: var(--accent-soft); color: var(--accent); border-radius: 9px; padding: 14px 16px; }
+.blocked p { margin: 4px 0 0; }

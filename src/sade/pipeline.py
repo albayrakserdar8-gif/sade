@@ -13,7 +13,15 @@ from __future__ import annotations
 import uuid
 from datetime import date
 
-from . import config, dates, mcp_takvim, otari, privacy, prompts
+from . import config, dates, guard, mcp_takvim, otari, privacy, prompts
+
+
+def _guard_calls(run_id: str) -> list[dict]:
+    return [g["call"] for g in guard.GUARD_LOG.get(run_id, []) if g.get("call")]
+
+
+def _guard_verdicts(run_id: str) -> list[dict]:
+    return [{k: v for k, v in g.items() if k != "call"} for g in guard.GUARD_LOG.pop(run_id, [])]
 
 
 def new_run_id() -> str:
@@ -37,6 +45,9 @@ async def ocr(image_uri: str, *, run_id: str) -> tuple[str, otari.Call]:
 
 
 async def classify(masked_text: str, *, run_id: str) -> tuple[dict, otari.Call]:
+    # This is the first call that sends the letter's text to a model, so the
+    # full guardrails run here: nothing reaches any model if they fail.
+    callback = config.callback_base()
     text, call = await otari.chat(
         role="classify",
         model=config.MODEL_CLASSIFIER,
@@ -47,6 +58,7 @@ async def classify(masked_text: str, *, run_id: str) -> tuple[dict, otari.Call]:
             {"role": "system", "content": prompts.CLASSIFY},
             {"role": "user", "content": masked_text[:6000]},
         ],
+        extra={"guardrails": guard.entries(callback, run_id)} if callback else None,
     )
     result = otari.parse_json(text)
     if result.get("doc_type") not in prompts.DOC_TYPES:
@@ -56,7 +68,7 @@ async def classify(masked_text: str, *, run_id: str) -> tuple[dict, otari.Call]:
 
 async def analyze(
     *, text: str | None = None, image_uri: str | None = None, run_id: str | None = None,
-    simulate_outage: bool = False,
+    simulate_outage: bool = False, skip_masking: bool = False,
 ) -> dict:
     run_id = run_id or new_run_id()
     calls: list[otari.Call] = []
@@ -66,7 +78,8 @@ async def analyze(
             calls.append(call)
         assert text is not None
 
-        masked = privacy.mask(text)
+        # skip_masking exists only to demonstrate the tr-pii guardrail.
+        masked = privacy.MaskResult(text=text) if skip_masking else privacy.mask(text)
 
         doc_class, call = await classify(masked.text, run_id=run_id)
         calls.append(call)
@@ -112,7 +125,13 @@ async def analyze(
             ],
             headers={"Otari-Code-Execution": "otari"},
             # Every tool call is billed, so keep the tool loop short.
-            extra={"max_tool_iterations": 7, **({"mcp_servers": mcp_servers} if mcp_servers else {})},
+            extra={
+                "max_tool_iterations": 7,
+                **({"mcp_servers": mcp_servers} if mcp_servers else {}),
+                # Checked again here (PII only, no model call needed): the text
+                # must still be masked when it reaches the analyst.
+                **({"guardrails": guard.entries(callback, run_id, ("tr-pii",))} if callback else {}),
+            },
             conversation_id=run_id,
             metadata={"doc_type": doc_class["doc_type"]},
         )
@@ -124,7 +143,8 @@ async def analyze(
     except otari.OtariError as e:
         if e.call:
             calls.append(e.call)
-        e.calls = [c.to_dict() for c in calls]  # type: ignore[attr-defined]
+        e.calls = [c.to_dict() for c in calls] + _guard_calls(run_id)  # type: ignore[attr-defined]
+        e.guardrails = _guard_verdicts(run_id)  # type: ignore[attr-defined]
         raise
 
     mcp_calls = mcp_takvim.CALL_LOG.pop(run_id, [])
@@ -149,7 +169,8 @@ async def analyze(
         # The model only ever saw placeholders; put the person's own data back
         # for display, here on their side.
         "card": privacy.unmask_deep(card, masked.mapping),
-        "calls": [c.to_dict() for c in calls],
+        "calls": [c.to_dict() for c in calls] + _guard_calls(run_id),
+        "guardrails": _guard_verdicts(run_id),
         "mcp": {"connected": bool(mcp_servers), "calls": mcp_calls},
         "calendar": calendar,
         "cost_usd": round(sum(c.cost_usd for c in calls), 6),

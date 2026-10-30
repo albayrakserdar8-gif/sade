@@ -23,21 +23,25 @@ async function analyze(file) {
   const form = new FormData();
   form.append("file", file);
   form.append("simulate_outage", $("outage").checked);
+  form.append("skip_masking", $("nomask").checked);
   try {
     const res = await fetch("/api/analyze", { method: "POST", body: form });
     const body = await res.json();
-    if (!res.ok) throw new Error(body.detail || res.statusText);
+    if (!res.ok) {
+      if (body.calls?.length || body.guardrails?.length) renderBlocked(body);
+      throw new Error(body.detail || res.statusText);
+    }
     render(body);
     setStatus("");
   } catch (err) {
     setStatus(err.message, true);
-    $("empty").classList.remove("hidden");
+    if ($("result").classList.contains("hidden")) $("empty").classList.remove("hidden");
   }
 }
 
 function render(r) {
   $("card").innerHTML = r.card ? renderCard(r.card, r.calendar || []) : '<p class="note">Analiz yapılamadı.</p>';
-  $("otari").innerHTML = renderCalls(r.calls || [], r.cost_usd) + renderMcp(r.mcp);
+  $("otari").innerHTML = renderCalls(r.calls || [], r.cost_usd) + renderGuardrails(r.guardrails) + renderMcp(r.mcp);
   const pii = Object.entries(r.pii || {});
   $("pii").innerHTML = pii.length
     ? pii.map(([k, n]) => `<span class="chip">${esc(PII_LABELS[k] || k)} × ${n} maskelendi</span>`).join("")
@@ -108,7 +112,7 @@ function renderCard(c, calendar) {
     ${warnings ? `<div class="warnings"><strong>Dikkat</strong><ul>${warnings}</ul></div>` : ""}`;
 }
 
-const ROLE_LABELS = { analyze: "Analiz", ocr: "Görüntüden metin", classify: "Belge türü", draft: "Dilekçe", guard: "Güvenlik" };
+const ROLE_LABELS = { analyze: "Analiz", ocr: "Görüntüden metin", classify: "Belge türü", draft: "Dilekçe", guard: "Guardrail hakemi" };
 
 function renderCalls(calls, total) {
   const rows = calls.map((c) => `
@@ -124,6 +128,25 @@ function renderCalls(calls, total) {
   `).join("");
   return `<table class="calls"><thead><tr><th>Rol</th><th>Model</th><th>Sağlayıcı</th><th>Süre</th><th>Maliyet</th></tr></thead>
     <tbody>${rows}</tbody><tfoot><tr><td colspan="4">Toplam</td><td>$${Number(total || 0).toFixed(4)}</td></tr></tfoot></table>`;
+}
+
+function renderBlocked(b) {
+  $("card").innerHTML = '<div class="blocked"><strong>Analiz durduruldu</strong><p>Belge yapay zekâ modeline gönderilmedi.</p></div>';
+  const total = (b.calls || []).reduce((n, c) => n + Number(c.cost_usd || 0), 0);
+  $("otari").innerHTML = renderCalls(b.calls || [], total) + renderGuardrails(b.guardrails);
+  $("pii").innerHTML = ""; $("masked").textContent = ""; $("dates").innerHTML = "";
+  $("result").classList.remove("hidden");
+}
+
+const GUARD_LABELS = { "tr-pii": "Kişisel veri sızıntısı", "tr-injection": "Gizli talimat (prompt injection)" };
+
+function renderGuardrails(list) {
+  if (!list || !list.length) return "";
+  const rows = list.map((g) => `<tr><td>${esc(GUARD_LABELS[g.profile] || g.profile)}<br><small><code>${esc(g.profile)}</code></small></td>
+    <td>${g.valid === false ? '<span class="chip">engellendi</span>' : g.valid ? '<span class="chip ok">geçti</span>' : "?"}</td>
+    <td>${esc(g.explanation || "")}</td></tr>`).join("");
+  return `<h3>Guardrail'ler (Otari, modele göndermeden önce bizim servisimize sordu)</h3>
+    <table class="calls"><thead><tr><th>Kontrol</th><th>Karar</th><th>Açıklama</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 const MCP_LABELS = {

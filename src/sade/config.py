@@ -43,3 +43,6 @@ def public_url() -> str | None:
 def callback_base() -> str | None:
     url = public_url()
     return f"{url}/x/{PUBLIC_SECRET}" if url else None
+
+# Guardrail judge for prompt injection hidden in letters (open-weight policy classifier).
+MODEL_GUARD = os.getenv("SADE_MODEL_GUARD", "openai/gpt-oss-safeguard-120b")

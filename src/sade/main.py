@@ -11,7 +11,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import config, extract, mcp_takvim, otari, pipeline
+from . import config, extract, guard, mcp_takvim, otari, pipeline
 
 ROOT = Path(__file__).resolve().parents[2]
 STATIC = Path(__file__).parent / "static"
@@ -46,6 +46,7 @@ async def only_callbacks_through_tunnel(request: Request, call_next):
     return await call_next(request)
 
 
+app.include_router(guard.router)
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 if SAMPLES.exists():
     app.mount("/samples", StaticFiles(directory=SAMPLES), name="samples")
@@ -85,7 +86,9 @@ def samples() -> list[dict]:
 
 
 @app.post("/api/analyze")
-async def analyze(file: UploadFile = File(...), simulate_outage: bool = Form(False)):
+async def analyze(
+    file: UploadFile = File(...), simulate_outage: bool = Form(False), skip_masking: bool = Form(False),
+):
     data = await file.read()
     if len(data) > 15 * 1024 * 1024:
         raise HTTPException(413, "Dosya 15 MB'tan büyük olamaz.")
@@ -103,14 +106,20 @@ async def analyze(file: UploadFile = File(...), simulate_outage: bool = Form(Fal
         raise HTTPException(415, "PDF, fotoğraf veya metin dosyası yükleyin.")
 
     try:
-        return await pipeline.analyze(text=text, image_uri=image_uri, simulate_outage=simulate_outage)
-    except otari.OtariError as e:
-        return JSONResponse(
-            status_code=502 if e.status >= 500 else e.status,
-            content={"detail": f"Yapay zekâ servisi hata verdi: {e.status} {e.code or ''}".strip(),
-                     "otari": {"status": e.status, "code": e.code, "detail": e.detail},
-                     "calls": getattr(e, "calls", [])},
+        return await pipeline.analyze(
+            text=text, image_uri=image_uri, simulate_outage=simulate_outage, skip_masking=skip_masking,
         )
+    except otari.OtariError as e:
+        content = {
+            "detail": f"Yapay zekâ servisi hata verdi: {e.status} {e.code or ''}".strip(),
+            "otari": {"status": e.status, "code": e.code, "detail": e.detail},
+            "calls": getattr(e, "calls", []),
+            "guardrails": getattr(e, "guardrails", []),
+        }
+        if e.code == "guardrail_violation":
+            reasons = [g.get("explanation") for g in (e.detail.get("guardrails") or []) if g.get("explanation")]
+            content["detail"] = "Otari guardrail'i isteği durdurdu, belge modele gönderilmedi. " + " ".join(reasons)
+        return JSONResponse(status_code=502 if e.status >= 500 else e.status, content=content)
 
 
 # Otari-facing endpoints, under the secret prefix: MCP at /x/<secret>/mcp.

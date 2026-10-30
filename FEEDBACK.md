@@ -90,3 +90,20 @@ Friction and wins noted while building, for the final feedback submission.
   came back as a CloudFront `504` HTML page after ~30 s, not as a JSON error or
   an MCP tool error the model could recover from. Likely the gateway waits on
   the MCP connection before sending any bytes.
+- **Request-level guardrails with our own endpoint: works, and is the only
+  keyless option for a tenant.** Every catalog guardrail needs a third-party
+  key and `any_llm` is closed to organizations, so we wrote a tiny `/validate`
+  service (PII regex + `gpt-oss-safeguard-120b` through Otari as an
+  injection judge) and passed it as `guardrails: [{profile, url, mode:
+  "block"}]`. Works on both Chat Completions and Responses; a hidden prompt
+  injection in a sample letter comes back as `403 guardrail_violation` with
+  our explanation, and no model is called. Would love a built-in way to use
+  an Otari-served open model as the judge (e.g. `any_llm` on the org's own
+  Otari key) so we don't need a public callback.
+- Tried `qwen3guard-gen-8b` first: fine for harm categories, but it labelled a
+  letter with an embedded "ignore previous instructions" note as
+  `Controversial / PII`, not as an injection. `gpt-oss-safeguard-120b` with a
+  written policy got all three samples right.
+- Guardrail `input_text` is only the latest user message. Fine for us (the
+  letter is the user message), but surprising if the risky content is in a
+  system prompt or earlier turn.
